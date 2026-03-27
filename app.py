@@ -10,7 +10,13 @@ st.set_page_config(page_title="Gestión Litografía Pro", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos(pestana):
-    return conn.read(worksheet=pestana, ttl="0s")
+    try:
+        # Intentamos leer la pestaña
+        return conn.read(worksheet=pestana, ttl="0s")
+    except Exception as e:
+        st.error(f"Error de conexión con Google Sheets en la pestaña '{pestana}'.")
+        st.info("Revisa que los nombres de las pestañas en Excel sean exactos y en minúsculas.")
+        st.stop() # Detiene la app aquí para no mostrar la pantalla roja fea
 
 # --- LOGIN ---
 if 'autenticado' not in st.session_state:
