@@ -13,30 +13,34 @@ URL_SCRIPT = "https://script.google.com/macros/s/AKfycbz61gcjsNtVT5L2utA6XbRUVdL
 
 def leer_datos(pestana):
     try:
-        # Forzamos la lectura ignorando lo que Google crea que son encabezados
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
         res = requests.get(url, timeout=10)
+        if res.status_code != 200: return pd.DataFrame()
         
-        # Leemos el CSV
-        df = pd.read_csv(io.StringIO(res.text))
+        # Leemos el archivo ignorando los nombres de columnas de Google
+        df = pd.read_csv(io.StringIO(res.text), header=0)
         
-        # FUERZA BRUTA: Si la columna 'nombre' no existe, 
-        # asumimos que la fila 0 son los nombres reales.
-        if 'nombre' not in [str(c).lower().strip() for c in df.columns]:
-            df = pd.read_csv(io.StringIO(res.text), header=0)
-        
-        # Limpieza estándar de columnas
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        
-        # Eliminamos filas que sean copias del encabezado
-        if not df.empty:
-            df = df[df['nombre'].astype(str).lower() != 'nombre']
+        # FUERZA BRUTA: Renombramos las columnas por posición (A, B, C)
+        # Así no importa si Google lee "nombre administrador" o "nombre"
+        if pestana == "usuarios":
+            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+        elif pestana == "ventas":
+            columnas_ventas = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 
+                               'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 
+                               'celular', 'correo', 'factura']
+            df.columns = columnas_ventas + list(df.columns[len(columnas_ventas):])
+
+        # Limpiamos espacios y basura
+        for col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
             
+        # Filtramos filas que sean una repetición de los títulos
+        df = df[df['nombre'].str.lower() != 'nombre']
+        
         return df
     except Exception as e:
-        st.error(f"Error de lectura: {e}")
+        st.error(f"Error técnico en lectura: {e}")
         return pd.DataFrame()
-
 
 def enviar_google(payload):
     try:
@@ -52,43 +56,39 @@ def enviar_google(payload):
         return False
 
 # --- LOGIN ---
-if 'autenticado' not in st.session_state: 
-    st.session_state['autenticado'] = False
-
 df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
-    # Verificación de seguridad para evitar el KeyError
-    if not df_users_db.empty and 'nombre' in df_users_db.columns:
-        # Limpiamos los datos de la columna nombre
-        u_list = df_users_db['nombre'].dropna().astype(str).str.strip().unique().tolist()
+    if not df_users_db.empty:
+        # Quitamos valores nulos y dejamos solo nombres reales
+        u_list = [u for u in df_users_db['nombre'].unique().tolist() if u.lower() != 'nan' and u != '']
         
         if u_list:
-            u_input = st.selectbox("Seleccione su Usuario", u_list)
+            u_input = st.selectbox("Usuario", u_list)
             p_input = st.text_input("Contraseña", type="password")
             
             if st.button("INGRESAR"):
-                # Buscamos fila del usuario
-                user_match = df_users_db[df_users_db['nombre'].astype(str).str.strip() == u_input]
+                # Comparación ultra-segura
+                user_match = df_users_db[df_users_db['nombre'] == u_input]
                 if not user_match.empty:
                     user_data = user_match.iloc[0]
-                    # Comparación segura de contraseña y rol
-                    if str(user_data['clave']).strip() == str(p_input).strip():
+                    if str(user_data['clave']) == str(p_input):
                         st.session_state.update({
                             "autenticado": True, 
                             "usuario": u_input, 
-                            "rol": str(user_data['rol']).lower().strip()
+                            "rol": str(user_data['rol']).lower()
                         })
                         st.rerun()
-                    else:
-                        st.error("Contraseña incorrecta")
+                    else: st.error("Contraseña incorrecta")
         else:
-            st.warning("La lista de usuarios está vacía en el Excel.")
+            st.warning("No se encontraron usuarios en el archivo.")
     else:
-        st.error("Error técnico: No se reconoce la columna 'nombre'. Revisa los encabezados del Excel.")
+        st.error("No se pudo conectar con la base de datos de usuarios.")
     st.stop()
+
+
 # --- MENÚ LATERAL ---
 st.sidebar.title(f"👤 {st.session_state['usuario']}")
 menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
