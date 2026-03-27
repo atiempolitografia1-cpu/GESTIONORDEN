@@ -13,22 +13,26 @@ URL_SCRIPT = "https://script.google.com/macros/s/AKfycbz61gcjsNtVT5L2utA6XbRUVdL
 
 def leer_datos(pestana):
     try:
-        # Añadimos headers=0 para forzar que la fila 1 sean los títulos
+        # Forzamos la lectura sin saltar filas y limpiando nombres
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
-        res = requests.get(url)
+        res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text))
         
-        # SI LAS COLUMNAS VIENEN PEGADAS (como vimos en la imagen), LAS REPARAMOS:
-        if 'nombre' not in [str(c).lower() for c in df.columns]:
-            # Si la columna se llama "nombre administrador", la renombramos a "nombre"
-            df.columns = [str(c).split(' ')[0].strip().lower() for c in df.columns]
-        else:
-            df.columns = [str(c).strip().lower() for c in df.columns]
-            
+        # Limpieza extrema: nombres de columnas a minúsculas y sin espacios
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        
+        # Si por error los datos están en el nombre de la columna (como vimos antes)
+        # los bajamos a la tabla
+        if "administrador" in df.columns.tolist():
+             # Reiniciamos el DataFrame si detectamos datos en los headers
+             df = pd.read_csv(io.StringIO(res.text), header=None)
+             df.columns = ["nombre", "clave", "rol"]
+             # Quitamos la primera fila si se repite el encabezado
+             if df.iloc[0,0] == "nombre": df = df.drop(0)
+             
         return df
     except: 
         return pd.DataFrame()
-
 def enviar_google(payload):
     try:
         # Añadimos un timeout para que no se quede colgado
@@ -43,19 +47,20 @@ def enviar_google(payload):
         return False
 
 # --- LOGIN ---
-if 'autenticado' not in st.session_state: 
-    st.session_state['autenticado'] = False
-
 df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     if not df_users_db.empty:
-        # Esto asegura que la lista de usuarios no tenga espacios vacíos
-        u_list = df_users_db['nombre'].dropna().astype(str).unique().tolist()
+        # Convertimos todo a texto y quitamos nulos para que no falle el selectbox
+        df_users_db['nombre'] = df_users_db['nombre'].astype(str).str.strip()
+        u_list = df_users_db['nombre'].unique().tolist()
+        
+        # ELIMINAMOS NOMBRES VACÍOS O "NAN"
+        u_list = [u for u in u_list if u.lower() != 'nan' and u != '']
         
         if u_list:
-            u_input = st.selectbox("Usuario", u_list)
+            u_input = st.selectbox("Seleccione su Usuario", u_list)
             p_input = st.text_input("Contraseña", type="password")
             
             if st.button("INGRESAR"):
