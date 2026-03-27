@@ -12,27 +12,38 @@ SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
 URL_SCRIPT = "https://script.google.com/macros/s/AKfycbz61gcjsNtVT5L2utA6XbRUVdLxjw_WTPDzC5lIuSDq7vzKeoyOuvng5Xb9MPgTOgAwEQ/exec"
 
 def leer_datos(pestana):
+    # Nueva forma de leer: Exportación directa a CSV
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={'0' if pestana=='usuarios' else 'TU_GID_VENTAS'}"
+    
+    # Si no sabes el GID de ventas, usa esta que es la original pero con un "timestamp" para evitar caché
+    url_alt = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
+    
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
-        res = requests.get(url)
-        if res.status_code != 200:
-            st.error(f"Error de Google (Pestaña {pestana}): Código {res.status_code}")
+        res = requests.get(url_alt, timeout=10)
+        if res.status_code == 200:
+            df = pd.read_csv(io.StringIO(res.text))
+            # Limpiamos nombres de columnas (quitar espacios y pasar a minúsculas)
+            df.columns = [str(c).strip().lower() for c in df.columns]
+            return df
+        else:
+            st.error(f"Error de conexión: {res.status_code}")
             return pd.DataFrame()
-        
-        df = pd.read_csv(io.StringIO(res.text))
-        # Limpieza profunda de columnas
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        return df
     except Exception as e:
-        st.error(f"Error crítico al leer {pestana}: {e}")
+        st.error(f"Error al leer: {e}")
         return pd.DataFrame()
 
 def enviar_google(payload):
-    try: 
-        res = requests.post(URL_SCRIPT, json=payload)
-        return res
-    except: 
-        return None
+    try:
+        # Añadimos un timeout para que no se quede colgado
+        res = requests.post(URL_SCRIPT, json=payload, timeout=15)
+        if res.status_code == 200:
+            return True
+        else:
+            st.error(f"Error al guardar: {res.status_code}")
+            return False
+    except Exception as e:
+        st.error(f"Error de red: {e}")
+        return False
 
 # --- LOGIN ---
 if 'autenticado' not in st.session_state: 
