@@ -5,24 +5,11 @@ import requests
 import io
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Sistema de Gestión", layout="wide")
+st.set_page_config(page_title="Atiempo Litografía", layout="wide")
 
-# Estilo para ocultar cosas innecesarias de Streamlit
-st.markdown("""
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- DATOS DE CONEXIÓN ---
-# 1. Tu ID de Google Sheet (Ya lo tienes)
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-# 2. PEGA AQUÍ LA URL QUE COPIASTE EN EL PASO ANTERIOR
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyDy11desfhOJhagy2EbvxdJZaEO9-6iGn1ZN1WA8GR8Oo1SKv1wFLPa17ptIgg6Vl08A/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycby1nYVVa-gvt1GumMceDK-IVXqYtcvkyI0Cnr4lCAx_0gBGeU8Vctp96Rh2aOz47uSnFQ/exec"
 
-# Función para leer datos de Google Sheets
 def leer_datos(nombre_pestana):
     try:
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nombre_pestana}"
@@ -31,133 +18,99 @@ def leer_datos(nombre_pestana):
     except:
         return pd.DataFrame()
 
-# --- LÓGICA DE LOGIN ---
+# --- LOGIN ---
 if 'logueado' not in st.session_state:
     st.session_state['logueado'] = False
 
-usuarios_df = leer_datos("usuarios")
+df_usuarios = leer_datos("usuarios")
 
 if not st.session_state['logueado']:
-    st.title("🔐 Acceso al Sistema")
-    if not usuarios_df.empty:
-        user_list = usuarios_df['nombre'].tolist()
-        user_input = st.selectbox("Usuario", user_list)
-        pass_input = st.text_input("Contraseña", type="password")
-        
+    st.title("🔐 Acceso Atiempo")
+    if not df_usuarios.empty:
+        u_input = st.selectbox("Usuario", df_usuarios['nombre'].tolist())
+        p_input = st.text_input("Contraseña", type="password")
         if st.button("ENTRAR"):
-            user_row = usuarios_df[usuarios_df['nombre'] == user_input].iloc[0]
-            if str(user_row['clave']) == pass_input:
-                st.session_state.update({
-                    'logueado': True,
-                    'user': user_input,
-                    'rol': user_row['rol']
-                })
+            user_row = df_usuarios[df_usuarios['nombre'] == u_input].iloc[0]
+            if str(user_row['clave']) == p_input:
+                st.session_state.update({'logueado': True, 'user': u_input, 'rol': user_row['rol']})
                 st.rerun()
-            else:
-                st.error("❌ Contraseña incorrecta")
-    else:
-        st.error("No se pudo conectar con la base de datos de usuarios.")
+            else: st.error("Clave incorrecta")
     st.stop()
 
-# --- INTERFAZ PRINCIPAL ---
-st.sidebar.title(f"Bienvenido, {st.session_state['user']}")
-st.sidebar.write(f"Rol: {st.session_state['rol']}")
-
-# Menu dinámico
+# --- NAVEGACIÓN ---
 menu = ["Nueva Venta", "Ver Ventas"]
 if st.session_state['rol'] == 'admin':
-    menu.append("Gestión de Empleados")
+    menu.extend(["Gestión de Empleados", "➕ Registrar Empleado"])
 
-choice = st.sidebar.radio("Menú", menu)
-
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state['logueado'] = False
-    st.rerun()
+choice = st.sidebar.radio("Menú Principal", menu)
 
 # --- SECCIÓN: NUEVA VENTA ---
 if choice == "Nueva Venta":
     st.header("📝 Registrar Orden de Servicio")
-    
-    # Usamos un contador para limpiar el formulario después de guardar
-    if 'form_id' not in st.session_state: st.session_state['form_id'] = 0
-    fid = str(st.session_state['form_id'])
-
     with st.form("venta_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            n_orden = st.text_input("N° de Orden", key="ord"+fid)
-            cliente = st.text_input("Nombre del Cliente", key="cli"+fid)
-            nit = st.text_input("NIT / CC", key="nit"+fid)
-            celular = st.text_input("Celular", key="cel"+fid)
-            correo = st.text_input("Correo Electrónico", key="cor"+fid)
+            n_orden = st.text_input("N° de Orden")
+            cliente = st.text_input("Nombre del Cliente")
+            nit = st.text_input("NIT / CC")
+            celular = st.text_input("Celular")
+            correo = st.text_input("Correo Electrónico")
         
         with col2:
-            descripcion = st.text_area("Descripción del Trabajo", key="des"+fid)
-            total = st.number_input("Valor Total ($)", min_value=0, key="tot"+fid)
-            abono = st.number_input("Abono Inicial ($)", min_value=0, key="abo"+fid)
-            metodo = st.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "TRANSFERENCIA"], key="met"+fid)
-            factura = st.radio("¿Requiere Factura?", ["SÍ", "NO"], horizontal=True, key="fac"+fid)
-            estado = st.selectbox("Estado Inicial", ["EN PROCESO", "TERMINADO", "PAGADO"], key="est"+fid)
+            descripcion = st.text_area("Descripción del Trabajo")
+            total = st.number_input("Valor Total ($)", min_value=0)
+            abono = st.number_input("Abono Inicial ($)", min_value=0)
+            metodo = st.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "TRANSFERENCIA"])
+            factura = st.radio("¿Requiere Factura?", ["SÍ", "NO"], horizontal=True)
+            estado = st.selectbox("Estado Inicial", ["EN PROCESO", "TERMINADO", "PAGADO"])
 
-        submit = st.form_submit_button("💾 GUARDAR ORDEN")
-
-        if submit:
-            if not n_orden or not cliente:
-                st.warning("⚠️ El N° de Orden y el Cliente son obligatorios.")
-            else:
+        if st.form_submit_button("💾 GUARDAR ORDEN"):
+            if n_orden and cliente:
                 payload = {
+                    "tipo_registro": "ventas",
                     "fecha": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    "n_orden": n_orden,
-                    "descripcion": descripcion,
-                    "total": total,
-                    "abono": abono,
-                    "saldo": total - abono,
-                    "metodo_pago": metodo,
-                    "estado": estado,
-                    "empleado": st.session_state['user'],
-                    "cliente": cliente,
-                    "nit": nit,
-                    "celular": celular,
-                    "correo": correo,
-                    "factura": factura
+                    "n_orden": n_orden, "descripcion": descripcion,
+                    "total": total, "abono": abono, "saldo": total - abono,
+                    "metodo_pago": metodo, "estado": estado, "empleado": st.session_state['user'],
+                    "cliente": cliente, "nit": nit, "celular": celular, "correo": correo, "factura": factura
                 }
-                
-                try:
-                    response = requests.post(URL_SCRIPT, json=payload)
-                    if response.status_code == 200:
-                        st.success(f"✅ Orden {n_orden} guardada en Google Sheets")
-                        st.balloons()
-                        st.session_state['form_id'] += 1 # Esto limpia el form
-                    else:
-                        st.error("Error al conectar con Google. Revisa la URL del Script.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                res = requests.post(URL_SCRIPT, json=payload)
+                if res.status_code == 200:
+                    st.success(f"✅ Venta {n_orden} guardada")
+                else: st.error("Error al guardar")
+            else: st.warning("Faltan campos obligatorios")
 
 # --- SECCIÓN: VER VENTAS ---
 elif choice == "Ver Ventas":
     st.header("📋 Historial de Ventas")
-    df_ventas = leer_datos("ventas")
-    
-    if not df_ventas.empty:
-        # Filtro: si no es admin, solo ve sus ventas
+    df_v = leer_datos("ventas")
+    if not df_v.empty:
         if st.session_state['rol'] != 'admin':
-            df_ventas = df_ventas[df_ventas['empleado'] == st.session_state['user']]
-            
-        search = st.text_input("🔍 Buscar por Cliente, NIT o N° Orden")
-        if search:
-            df_ventas = df_ventas[
-                df_ventas['cliente'].str.contains(search, case=False, na=False) |
-                df_ventas['n_orden'].astype(str).str.contains(search, na=False) |
-                df_ventas['nit'].astype(str).str.contains(search, na=False)
-            ]
-        
-        st.dataframe(df_ventas, use_container_width=True, hide_index=True)
-    else:
-        st.info("No hay ventas registradas aún.")
+            df_v = df_v[df_v['empleado'] == st.session_state['user']]
+        st.dataframe(df_v, use_container_width=True, hide_index=True)
 
-# --- SECCIÓN: EMPLEADOS ---
+# --- SECCIÓN: GESTIÓN DE EMPLEADOS ---
 elif choice == "Gestión de Empleados":
-    st.header("👥 Gestión de Usuarios")
-    st.write("Datos actuales en la nube:")
-    st.dataframe(usuarios_df, use_container_width=True, hide_index=True)
-    st.info("Para agregar o quitar empleados, edita la pestaña 'usuarios' en tu Google Sheets.")
+    st.header("👥 Lista de Usuarios")
+    st.dataframe(df_usuarios, use_container_width=True)
+
+# --- SECCIÓN: NUEVO EMPLEADO ---
+elif choice == "➕ Registrar Empleado":
+    st.header("👤 Crear Nuevo Usuario")
+    with st.form("form_nuevo_usuario"):
+        nuevo_nom = st.text_input("Nombre Completo")
+        nueva_clave = st.text_input("Contraseña de Acceso", type="password")
+        nuevo_rol = st.selectbox("Rol del Usuario", ["admin", "vendedor"])
+        
+        if st.form_submit_button("✅ CREAR USUARIO"):
+            if nuevo_nom and nueva_clave:
+                payload_u = {
+                    "tipo_registro": "usuarios",
+                    "nombre": nuevo_nom,
+                    "clave": nueva_clave,
+                    "rol": nuevo_rol
+                }
+                r = requests.post(URL_SCRIPT, json=payload_u)
+                if r.status_code == 200:
+                    st.success(f"Usuario {nuevo_nom} registrado exitosamente.")
+                else: st.error("No se pudo registrar el usuario.")
