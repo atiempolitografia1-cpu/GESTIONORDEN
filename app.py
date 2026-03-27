@@ -15,11 +15,16 @@ def leer_datos(pestana):
     try:
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
         res = requests.get(url)
+        if res.status_code != 200:
+            st.error(f"Error de Google (Pestaña {pestana}): Código {res.status_code}")
+            return pd.DataFrame()
+        
         df = pd.read_csv(io.StringIO(res.text))
-        # --- ESTA LÍNEA LIMPIA LOS NOMBRES DE LAS COLUMNAS ---
-        df.columns = df.columns.str.strip().str.lower()
+        # Limpieza profunda de columnas
+        df.columns = [str(c).strip().lower() for c in df.columns]
         return df
-    except: 
+    except Exception as e:
+        st.error(f"Error crítico al leer {pestana}: {e}")
         return pd.DataFrame()
 
 def enviar_google(payload):
