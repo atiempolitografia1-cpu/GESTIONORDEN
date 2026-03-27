@@ -50,6 +50,7 @@ if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
 df_users_db = leer_datos("usuarios")
+st.write("Columnas detectadas:", df_users_db.columns.tolist())
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
