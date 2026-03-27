@@ -82,28 +82,57 @@ if st.sidebar.button("Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- SECCIÓN: GESTIÓN DE EMPLEADOS ---
+# --- SECCIÓN: GESTIÓN DE EMPLEADOS (CORREGIDA) ---
 if opcion == "Gestión de Empleados":
     st.title("👥 Administración de Personal")
     t1, t2 = st.tabs(["➕ Nuevo Empleado", "⚙️ Modificar / Eliminar"])
+    
     with t1:
-        n_nom = st.text_input("Nombre Completo")
-        n_cla = st.text_input("Contraseña")
-        n_rol = st.selectbox("Rol", ["empleado", "admin"])
-        if st.button("Registrar Empleado"):
+        st.subheader("Registrar nuevo acceso")
+        n_nom = st.text_input("Nombre Completo (Ej: Juan Perez)")
+        n_cla = st.text_input("Contraseña de acceso")
+        n_rol = st.selectbox("Rol del usuario", ["empleado", "admin"])
+        
+        if st.button("Registrar en el Sistema", use_container_width=True):
             if n_nom and n_cla:
                 payload = {"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}
-                if enviar_google(payload): st.success("Registrado"); st.rerun()
+                if enviar_google(payload): 
+                    st.success(f"✅ {n_nom} ahora tiene acceso al sistema."); st.rerun()
+            else: st.warning("Por favor, completa el nombre y la contraseña.")
+            
     with t2:
+        st.subheader("Control de Usuarios Activos")
         df_u = leer_datos("usuarios")
         if not df_u.empty:
-            u_sel = st.selectbox("Usuario a editar", df_u['nombre'].tolist())
+            # Filtramos para no dejar que el admin se borre a sí mismo por error desde aquí
+            usuarios_lista = df_u['nombre'].tolist()
+            u_sel = st.selectbox("Seleccione el empleado a gestionar:", usuarios_lista)
+            
             user_edit = df_u[df_u['nombre'] == u_sel].iloc[0]
-            e_cla = st.text_input("Nueva Clave", value=str(user_edit['clave']))
-            e_rol = st.selectbox("Nuevo Rol", ["empleado", "admin"], index=0 if user_edit['rol'] == "empleado" else 1)
-            if st.button("💾 Guardar Cambios"):
-                payload = {"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}
-                if enviar_google(payload): st.success("Actualizado"); st.rerun()
+            
+            st.write(f"**Rol actual:** {user_edit['rol']}")
+            e_cla = st.text_input("Cambiar Contraseña", value=str(user_edit['clave']))
+            e_rol = st.selectbox("Cambiar Rol", ["empleado", "admin"], index=0 if str(user_edit['rol']).lower() == "empleado" else 1)
+            
+            c_b1, c_b2 = st.columns(2)
+            with c_b1:
+                if st.button("💾 Guardar Cambios", use_container_width=True):
+                    payload = {"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}
+                    if enviar_google(payload): st.success("Datos actualizados"); st.rerun()
+            
+            with c_b2:
+                # Botón de eliminación definitiva del usuario
+                if u_sel != "Administrador": # Seguridad para el admin principal
+                    if st.button("🗑️ ELIMINAR ACCESO", use_container_width=True, type="secondary"):
+                        # Esta acción SOLO borra la fila en la pestaña 'usuarios'
+                        payload = {"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}
+                        if enviar_google(payload):
+                            st.warning(f"El acceso de {u_sel} ha sido revocado. Sus ventas registradas permanecerán en el historial.")
+                            st.rerun()
+                else:
+                    st.info("El Administrador principal no puede ser eliminado.")
+        else:
+            st.info("No hay usuarios registrados además del administrador de respaldo.")
 
 # --- SECCIÓN: VENTAS ---
 elif opcion == "Ventas":
