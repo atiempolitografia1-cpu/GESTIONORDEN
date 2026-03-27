@@ -11,7 +11,7 @@ st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
 URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyqx3mQopxUsMjokkhejP1newA3Gv-0OySPGFLhgGNlG6wgRPSieC3wlWO8QawQ6DRQXg/exec"
 
-# INICIALIZACIÓN DE SESIÓN (Para evitar errores de pantalla roja)
+# INICIALIZACIÓN DE SESIÓN SEGURA
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 if 'usuario' not in st.session_state: st.session_state['usuario'] = ""
 if 'rol' not in st.session_state: st.session_state['rol'] = ""
@@ -22,18 +22,23 @@ def leer_datos(pestana):
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text))
         
-        # Renombrar por posición para evitar errores si Google pega los nombres
+        # Limpieza de columnas por posición para evitar el KeyError 'nombre'
         if pestana == "usuarios":
-            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+            if len(df.columns) >= 3:
+                df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+            else: # Si el Excel está vacío o roto, creamos una tabla base
+                return pd.DataFrame(columns=['nombre', 'clave', 'rol'])
         elif pestana == "ventas":
             cols_v = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura']
             df.columns = cols_v + list(df.columns[len(cols_v):])
 
-        # Limpiar espacios
+        # Limpiar datos
         df = df.applymap(lambda x: str(x).strip() if pd.notnull(x) else x)
-        df = df[df.iloc[:,0].astype(str).str.lower() != df.columns[0].lower()]
+        # Eliminar filas que repiten el encabezado
+        df = df[df.iloc[:,0].astype(str).lower() != df.columns[0].lower()]
         return df
-    except: return pd.DataFrame()
+    except: 
+        return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
 
 def enviar_google(payload):
     try:
@@ -41,26 +46,44 @@ def enviar_google(payload):
         return res.status_code == 200
     except: return False
 
-# --- LOGIN ---
+# --- LOGIN CON LLAVE MAESTRA ---
 df_users_db = leer_datos("usuarios")
+
+# INYECTAR ADMINISTRADOR SI NO APARECE
+# Esto asegura que SIEMPRE puedas entrar aunque el Excel falle
+admin_existe = not df_users_db[df_users_db['nombre'].str.lower() == 'administrador'].empty if not df_users_db.empty else False
+
+if not admin_existe:
+    # Creamos una fila temporal para el administrador
+    admin_provisional = pd.DataFrame([{'nombre': 'Administrador', 'clave': 'admin123', 'rol': 'admin'}])
+    df_users_db = pd.concat([df_users_db, admin_provisional], ignore_index=True)
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
-    if not df_users_db.empty:
-        u_list = [u for u in df_users_db['nombre'].unique().tolist() if str(u).lower() != 'nan' and u != '']
-        if u_list:
-            u_input = st.selectbox("Usuario", u_list)
-            p_input = st.text_input("Contraseña", type="password")
-            if st.button("INGRESAR"):
-                user_match = df_users_db[df_users_db['nombre'] == u_input]
-                if not user_match.empty:
-                    user_data = user_match.iloc[0]
-                    if str(user_data['clave']) == str(p_input):
-                        st.session_state.update({"autenticado": True, "usuario": u_input, "rol": str(user_data['rol']).lower()})
-                        st.rerun()
-                    else: st.error("Contraseña incorrecta")
-        else: st.warning("No hay usuarios en el Excel.")
-    else: st.error("Error de conexión con Google Sheets.")
+    
+    # Lista de usuarios limpia
+    u_list = [u for u in df_users_db['nombre'].unique().tolist() if str(u).lower() != 'nan' and u != '']
+    
+    if u_list:
+        u_input = st.selectbox("Usuario", u_list)
+        p_input = st.text_input("Contraseña", type="password")
+        
+        if st.button("INGRESAR"):
+            user_match = df_users_db[df_users_db['nombre'] == u_input]
+            if not user_match.empty:
+                user_data = user_match.iloc[0]
+                # Comparamos contraseña
+                if str(user_data['clave']) == str(p_input):
+                    st.session_state.update({
+                        "autenticado": True, 
+                        "usuario": u_input, 
+                        "rol": str(user_data['rol']).lower()
+                    })
+                    st.rerun()
+                else:
+                    st.error("Contraseña incorrecta")
+    else:
+        st.error("No se pudo cargar ningún usuario. Revisa el ID de tu Excel.")
     st.stop()
 
 # --- MENÚ LATERAL ---
@@ -85,14 +108,15 @@ if opcion == "Gestión de Empleados":
         if st.button("Registrar Empleado"):
             if n_nom and n_cla:
                 payload = {"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}
-                if enviar_google(payload): st.success("Empleado registrado"); st.rerun()
+                if enviar_google(payload): 
+                    st.success("Empleado registrado"); st.rerun()
             else: st.warning("Completa todos los campos")
             
     with t2:
         st.subheader("Editar datos de empleado")
         df_u = leer_datos("usuarios")
         if not df_u.empty:
-            u_sel = st.selectbox("Seleccione el usuario", df_u['nombre'].tolist())
+            u_sel = st.selectbox("Seleccione el usuario para editar", df_u['nombre'].tolist())
             user_to_edit = df_u[df_u['nombre'] == u_sel].iloc[0]
             edit_clave = st.text_input("Nueva Contraseña", value=str(user_to_edit['clave']))
             edit_rol = st.selectbox("Nuevo Rol", ["empleado", "admin"], index=0 if user_to_edit['rol'] == "empleado" else 1)
@@ -109,7 +133,7 @@ if opcion == "Gestión de Empleados":
                         if enviar_google(payload): st.warning("Eliminado"); st.rerun()
                     else: st.error("No puedes eliminar al Admin principal")
 
-# --- SECCIÓN: VENTAS (TU CÓDIGO ORIGINAL COMPLETO) ---
+# --- SECCIÓN: VENTAS ---
 elif opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     tab_reg, tab_edit = st.tabs(["📝 Registrar Nueva", "✏️ Editar Orden"])
@@ -133,7 +157,7 @@ elif opcion == "Ventas":
             v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+vs)
             v_pag = st.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="p"+vs)
 
-        if st.button("💾 GUARDAR", use_container_width=True):
+        if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
                 payload = {
                     "accion": "insertar", "tipo_registro": "ventas",
@@ -157,7 +181,7 @@ elif opcion == "Ventas":
                 d = df_e[df_e['n_orden'].astype(str) == str(ord_sel)].iloc[0]
                 e_abo = st.number_input("Nuevo Abono ($)", value=float(d['abono']))
                 e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
-                if st.button("Actualizar"):
+                if st.button("Actualizar Orden"):
                     payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_sel, "abono": e_abo, "saldo": float(d['total'])-e_abo, "estado": e_est}
                     if enviar_google(payload): st.success("Orden actualizada"); st.rerun()
 
