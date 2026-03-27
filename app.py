@@ -12,24 +12,21 @@ SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
 URL_SCRIPT = "https://script.google.com/macros/s/AKfycbz61gcjsNtVT5L2utA6XbRUVdLxjw_WTPDzC5lIuSDq7vzKeoyOuvng5Xb9MPgTOgAwEQ/exec"
 
 def leer_datos(pestana):
-    # Nueva forma de leer: Exportación directa a CSV
-    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={'0' if pestana=='usuarios' else 'TU_GID_VENTAS'}"
-    
-    # Si no sabes el GID de ventas, usa esta que es la original pero con un "timestamp" para evitar caché
-    url_alt = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
-    
     try:
-        res = requests.get(url_alt, timeout=10)
-        if res.status_code == 200:
-            df = pd.read_csv(io.StringIO(res.text))
-            # Limpiamos nombres de columnas (quitar espacios y pasar a minúsculas)
-            df.columns = [str(c).strip().lower() for c in df.columns]
-            return df
+        # Añadimos headers=0 para forzar que la fila 1 sean los títulos
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
+        res = requests.get(url)
+        df = pd.read_csv(io.StringIO(res.text))
+        
+        # SI LAS COLUMNAS VIENEN PEGADAS (como vimos en la imagen), LAS REPARAMOS:
+        if 'nombre' not in [str(c).lower() for c in df.columns]:
+            # Si la columna se llama "nombre administrador", la renombramos a "nombre"
+            df.columns = [str(c).split(' ')[0].strip().lower() for c in df.columns]
         else:
-            st.error(f"Error de conexión: {res.status_code}")
-            return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Error al leer: {e}")
+            df.columns = [str(c).strip().lower() for c in df.columns]
+            
+        return df
+    except: 
         return pd.DataFrame()
 
 def enviar_google(payload):
