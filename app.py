@@ -9,38 +9,52 @@ st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
 st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyqx3mQopxUsMjokkhejP1newA3Gv-0OySPGFLhgGNlG6wgRPSieC3wlWO8QawQ6DRQXg/exec" # <--- PEGA TU URL AQUÍ
-
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyqx3mQopxUsMjokkhejP1newA3Gv-0OySPGFLhgGNlG6wgRPSieC3wlWO8QawQ6DRQXg/exec"
 
 def leer_datos(pestana):
     try:
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
         res = requests.get(url)
         df = pd.read_csv(io.StringIO(res.text))
+        # --- ESTA LÍNEA LIMPIA LOS NOMBRES DE LAS COLUMNAS ---
+        df.columns = df.columns.str.strip().str.lower()
         return df
-    except: return pd.DataFrame()
+    except: 
+        return pd.DataFrame()
 
 def enviar_google(payload):
-    try: return requests.post(URL_SCRIPT, json=payload)
-    except: return None
+    try: 
+        res = requests.post(URL_SCRIPT, json=payload)
+        return res
+    except: 
+        return None
 
 # --- LOGIN ---
-if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
+if 'autenticado' not in st.session_state: 
+    st.session_state['autenticado'] = False
 
 df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     if not df_users_db.empty:
-        u_input = st.selectbox("Usuario", df_users_db['nombre'].tolist())
-        p_input = st.text_input("Contraseña", type="password")
-        if st.button("INGRESAR"):
-            user_data = df_users_db[df_users_db['nombre'] == u_input].iloc[0]
-            if str(user_data['clave']) == p_input:
-                st.session_state.update({"autenticado": True, "usuario": u_input, "rol": user_data['rol']})
-                st.rerun()
-            else: st.error("Contraseña incorrecta")
-    else: st.error("No se pudo cargar la base de datos de usuarios.")
+        # Usamos .get() por si acaso la columna no se llama 'nombre'
+        u_list = df_users_db['nombre'].tolist() if 'nombre' in df_users_db.columns else []
+        
+        if u_list:
+            u_input = st.selectbox("Usuario", u_list)
+            p_input = st.text_input("Contraseña", type="password")
+            if st.button("INGRESAR"):
+                user_data = df_users_db[df_users_db['nombre'] == u_input].iloc[0]
+                if str(user_data['clave']) == p_input:
+                    st.session_state.update({"autenticado": True, "usuario": u_input, "rol": user_data['rol']})
+                    st.rerun()
+                else: 
+                    st.error("Contraseña incorrecta")
+        else:
+            st.error("La columna 'nombre' no existe en el Excel.")
+    else: 
+        st.error("No se pudo cargar la base de datos de usuarios. Revisa el Excel.")
     st.stop()
 
 # --- MENÚ LATERAL ---
@@ -64,12 +78,13 @@ if opcion == "Gestión de Empleados":
         n_rol = st.selectbox("Rol", ["empleado", "admin"])
         if st.button("Registrar Empleado"):
             payload = {"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}
-            if enviar_google(payload): st.success("Empleado registrado"); st.rerun()
+            if enviar_google(payload): 
+                st.success("Empleado registrado"); st.rerun()
             
     with t2:
         st.subheader("Editar datos de empleado")
         df_u = leer_datos("usuarios")
-        if not df_u.empty:
+        if not df_u.empty and 'nombre' in df_u.columns:
             u_sel = st.selectbox("Seleccione el usuario", df_u['nombre'].tolist())
             user_to_edit = df_u[df_u['nombre'] == u_sel].iloc[0]
             edit_clave = st.text_input("Nueva Contraseña", value=str(user_to_edit['clave']))
@@ -85,7 +100,8 @@ if opcion == "Gestión de Empleados":
                     if u_sel != "Administrador":
                         payload = {"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}
                         enviar_google(payload); st.warning("Eliminado"); st.rerun()
-                    else: st.error("No puedes eliminar al Admin principal")
+                    else: 
+                        st.error("No puedes eliminar al Admin principal")
 
 # --- SECCIÓN: VENTAS ---
 elif opcion == "Ventas":
@@ -119,12 +135,13 @@ elif opcion == "Ventas":
                 "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli,
                 "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac
             }
-            if enviar_google(payload): st.session_state['limp_v'] += 1; st.rerun()
+            if enviar_google(payload): 
+                st.session_state['limp_v'] += 1; st.rerun()
 
     with tab_edit:
         st.subheader("Actualizar Orden")
         df_e = leer_datos("ventas")
-        if not df_e.empty:
+        if not df_e.empty and 'n_orden' in df_e.columns:
             ord_sel = st.selectbox("Seleccione N° de Orden:", ["Seleccionar..."] + df_e['n_orden'].unique().tolist())
             if ord_sel != "Seleccionar...":
                 d = df_e[df_e['n_orden'].astype(str) == str(ord_sel)].iloc[0]
@@ -138,8 +155,13 @@ elif opcion == "Ventas":
     search = st.text_input("🔍 Buscar por Orden, Cliente o NIT")
     df_t = leer_datos("ventas")
     if not df_t.empty:
-        df_t = df_t.iloc[::-1] # Invertir para ver lo más reciente
-        if st.session_state['rol'] != 'admin': df_t = df_t[df_t['empleado'] == st.session_state['usuario']]
+        df_t = df_t.iloc[::-1] 
+        if st.session_state['rol'] != 'admin' and 'empleado' in df_t.columns: 
+            df_t = df_t[df_t['empleado'] == st.session_state['usuario']]
+        
         if search:
-            df_t = df_t[df_t['n_orden'].astype(str).str.contains(search, case=False) | df_t['cliente'].astype(str).str.contains(search, case=False) | df_t['nit'].astype(str).str.contains(search, case=False)]
+            # Filtro robusto
+            mask = df_t.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)
+            df_t = df_t[mask]
+            
         st.dataframe(df_t, use_container_width=True, hide_index=True)
