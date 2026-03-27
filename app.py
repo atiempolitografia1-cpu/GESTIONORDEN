@@ -146,17 +146,51 @@ elif opcion == "Ventas":
                     st.session_state['limp_v'] += 1
                     st.success("¡Venta guardada!"); st.rerun()
 
-    # 2. PESTAÑA EDITAR (Todos la ven)
+   # 2. PESTAÑA EDITAR (Con filtro de autoría para empleados)
     with tab_edit:
         if not df_v.empty:
-            ord_s = st.selectbox("N° Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].unique().tolist())
-            if ord_s != "Seleccionar...":
-                d = df_v[df_v['n_orden'] == ord_s].iloc[0]
-                e_abo = st.number_input("Nuevo Abono", value=float(d['abono']))
-                e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
-                if st.button("Actualizar Registro"):
-                    payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "abono": e_abo, "saldo": float(d['total'])-e_abo, "estado": e_est}
-                    if enviar_google(payload): st.success("Actualizado"); st.rerun()
+            # --- FILTRO DE SEGURIDAD PARA EDICIÓN ---
+            if st.session_state['rol'] == 'admin':
+                # El admin ve todas las órdenes
+                opciones_ordenes = df_v['n_orden'].unique().tolist()
+            else:
+                # El empleado SOLO ve las órdenes donde su nombre aparece en la columna 'empleado'
+                filtro_mis_ordenes = df_v[df_v['empleado'] == st.session_state['usuario']]
+                opciones_ordenes = filtro_mis_ordenes['n_orden'].unique().tolist()
+
+            if opciones_ordenes:
+                ord_s = st.selectbox("Seleccione N° de Orden para editar:", ["Seleccionar..."] + opciones_ordenes)
+                
+                if ord_s != "Seleccionar...":
+                    # Extraemos los datos de la orden seleccionada
+                    d = df_v[df_v['n_orden'] == ord_s].iloc[0]
+                    
+                    st.info(f"Editando orden de: {d['cliente']} (Registrada por: {d['empleado']})")
+                    
+                    e_abo = st.number_input("Nuevo Abono ($)", value=float(d['abono']), step=1.0)
+                    e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
+                                         index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
+                    
+                    if st.button("Actualizar Registro", use_container_width=True):
+                        # Calculamos el nuevo saldo automáticamente
+                        nuevo_saldo = float(d['total']) - e_abo
+                        
+                        payload = {
+                            "accion": "actualizar", 
+                            "tipo_registro": "ventas", 
+                            "id_busqueda": ord_s, 
+                            "abono": e_abo, 
+                            "saldo": nuevo_saldo, 
+                            "estado": e_est
+                        }
+                        
+                        if enviar_google(payload): 
+                            st.success(f"✅ Orden {ord_s} actualizada correctamente")
+                            st.rerun()
+            else:
+                st.warning("No tienes órdenes registradas para editar.")
+        else:
+            st.info("No hay ventas registradas en el sistema.")
 
     # 3. PESTAÑA REPORTES (SOLO ADMIN)
     if st.session_state['rol'] == 'admin':
