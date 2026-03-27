@@ -47,30 +47,38 @@ if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
 df_users_db = leer_datos("usuarios")
-st.write("Columnas detectadas:", df_users_db.columns.tolist())
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     if not df_users_db.empty:
-        # Usamos .get() por si acaso la columna no se llama 'nombre'
-        u_list = df_users_db['nombre'].tolist() if 'nombre' in df_users_db.columns else []
+        # Esto asegura que la lista de usuarios no tenga espacios vacíos
+        u_list = df_users_db['nombre'].dropna().astype(str).unique().tolist()
         
         if u_list:
             u_input = st.selectbox("Usuario", u_list)
             p_input = st.text_input("Contraseña", type="password")
+            
             if st.button("INGRESAR"):
-                user_data = df_users_db[df_users_db['nombre'] == u_input].iloc[0]
-                if str(user_data['clave']) == p_input:
-                    st.session_state.update({"autenticado": True, "usuario": u_input, "rol": user_data['rol']})
-                    st.rerun()
-                else: 
-                    st.error("Contraseña incorrecta")
+                # Buscamos al usuario ignorando mayúsculas/minúsculas
+                user_match = df_users_db[df_users_db['nombre'].astype(str) == u_input]
+                
+                if not user_match.empty:
+                    user_data = user_match.iloc[0]
+                    # Convertimos ambos a string para comparar sin errores
+                    if str(user_data['clave']).strip() == str(p_input).strip():
+                        st.session_state.update({
+                            "autenticado": True, 
+                            "usuario": u_input, 
+                            "rol": str(user_data['rol']).lower().strip()
+                        })
+                        st.rerun()
+                    else: 
+                        st.error("Contraseña incorrecta")
         else:
-            st.error("La columna 'nombre' no existe en el Excel.")
+            st.error("No hay usuarios registrados en el Excel.")
     else: 
-        st.error("No se pudo cargar la base de datos de usuarios. Revisa el Excel.")
+        st.error("No se pudo cargar la base de datos de usuarios.")
     st.stop()
-
 # --- MENÚ LATERAL ---
 st.sidebar.title(f"👤 {st.session_state['usuario']}")
 menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
