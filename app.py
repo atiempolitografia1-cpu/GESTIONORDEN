@@ -50,44 +50,66 @@ def enviar_google(payload):
     except: return False
 
 # --- LOGIN COMPLETO ---
-# Leemos los usuarios reales del Excel
+# ==========================================
+#        BLOQUE DE LOGIN CORREGIDO
+# ==========================================
+
+# 1. Cargamos los usuarios desde Google Sheets
 df_real = leer_datos("usuarios")
 
-# Creamos al Administrador de emergencia
-admin_emergencia = pd.DataFrame([{'nombre': 'Administrador', 'clave': 'admin123', 'rol': 'admin'}])
+# 2. Creamos un Administrador de respaldo (por si el Excel falla)
+admin_respaldo = pd.DataFrame([{'nombre': 'Administrador', 'clave': 'admin123', 'rol': 'admin'}])
 
-# FUSIONAMOS: Si el administrador real ya está en el Excel, usamos ese. 
-# Si no está, sumamos el de emergencia.
-if not df_real.empty and 'administrador' in df_real['nombre'].str.lower().values:
-    df_users_db = df_real
+# 3. Fusionamos los datos evitando duplicados
+if not df_real.empty:
+    # Verificamos si el administrador ya existe en el Excel
+    if "administrador" in df_real['nombre'].astype(str).str.lower().values:
+        df_users_db = df_real
+    else:
+        df_users_db = pd.concat([df_real, admin_respaldo], ignore_index=True)
 else:
-    df_users_db = pd.concat([df_real, admin_emergencia], ignore_index=True).drop_duplicates(subset=['nombre'])
+    df_users_db = admin_respaldo
 
-if not st.session_state['autenticado']:
+# 4. Lógica de Pantalla de Acceso
+if not st.session_state.get('autenticado', False):
     st.title("🔐 Acceso al Sistema")
     
-    # Lista limpia para el selector
-    opciones_usuario = df_users_db['nombre'].unique().tolist()
-    opciones_usuario = [u for u in opciones_usuario if u.lower() != 'nan' and u != ""]
-
-    if opciones_usuario:
-        u_input = st.selectbox("Seleccione su Usuario", opciones_usuario)
+    # Limpiamos la lista de nombres para el selector
+    opciones = [u for u in df_users_db['nombre'].unique().tolist() if str(u).lower() != 'nan' and u != ""]
+    
+    if opciones:
+        u_input = st.selectbox("Seleccione su Usuario", opciones)
         p_input = st.text_input("Contraseña", type="password")
         
         if st.button("INGRESAR", use_container_width=True):
-            user_data = df_users_db[df_users_db['nombre'] == u_input].iloc[0]
-            if str(user_data['clave']) == str(p_input):
-                st.session_state.update({
-                    "autenticado": True,
-                    "usuario": u_input,
-                    "rol": str(user_data['rol']).lower()
-                })
-                st.rerun()
+            # Buscamos al usuario seleccionado
+            user_match = df_users_db[df_users_db['nombre'] == u_input]
+            
+            if not user_match.empty:
+                user_data = user_match.iloc[0]
+                
+                # --- VALIDACIÓN ULTRA-FLEXIBLE ---
+                # .strip() elimina espacios accidentales
+                # .lower() ignora si escribiste en mayúsculas o minúsculas
+                clave_excel = str(user_data['clave']).strip().lower()
+                clave_ingresada = str(p_input).strip().lower()
+                
+                if clave_excel == clave_ingresada:
+                    st.session_state.update({
+                        "autenticado": True,
+                        "usuario": u_input,
+                        "rol": str(user_data['rol']).strip().lower()
+                    })
+                    st.success(f"¡Bienvenido {u_input}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Contraseña incorrecta. Verifica mayúsculas o espacios.")
             else:
-                st.error("Contraseña incorrecta")
+                st.error("Usuario no encontrado.")
     else:
-        st.error("Error crítico: No se pueden cargar usuarios.")
-    st.stop()
+        st.error("No se encontraron usuarios. Revisa la pestaña 'usuarios' en tu Excel.")
+    
+    st.stop() # Bloquea el acceso al resto de la app
 
 # --- MENÚ LATERAL ---
 st.sidebar.title(f"👤 {st.session_state['usuario']}")
