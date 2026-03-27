@@ -27,7 +27,15 @@ def enviar_google(payload):
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 
 df_users_db = leer_datos("usuarios")
+df_usuarios = leer_datos("usuarios")
 
+# --- AÑADE ESTA LÍNEA AQUÍ ---
+if not df_usuarios.empty:
+    df_usuarios.columns = df_usuarios.columns.str.strip().str.lower()
+# -----------------------------
+
+if not st.session_state['logueado']:
+    # ... resto del código
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     if not df_users_db.empty:
