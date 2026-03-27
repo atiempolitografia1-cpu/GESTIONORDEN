@@ -106,21 +106,17 @@ if opcion == "Gestión de Empleados":
                 if enviar_google(payload): st.success("Actualizado"); st.rerun()
 
 # --- SECCIÓN: VENTAS ---
-# --- SECCIÓN: VENTAS (CON PESTAÑA DE REPORTES PRIVADA) ---
 elif opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v = leer_datos("ventas")
     
-    # Definimos qué pestañas mostrar según el ROL
+    # Definimos las pestañas según el ROL
     if st.session_state['rol'] == 'admin':
-        tabs = st.tabs(["📝 Registrar", "✏️ Editar", "📊 Reportes"])
-        tab_reg, tab_edit, tab_rep = tabs
+        tab_reg, tab_edit, tab_rep = st.tabs(["📝 Registrar", "✏️ Editar / Eliminar", "📊 Reportes"])
     else:
-        # El empleado NO ve la pestaña de Reportes
-        tabs = st.tabs(["📝 Registrar", "✏️ Editar"])
-        tab_reg, tab_edit = tabs
+        tab_reg, tab_edit = st.tabs(["📝 Registrar", "✏️ Editar"])
 
-    # 1. PESTAÑA REGISTRAR (Todos la ven)
+    # --- 1. PESTAÑA REGISTRAR ---
     with tab_reg:
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
@@ -145,103 +141,78 @@ elif opcion == "Ventas":
                 if enviar_google(payload): 
                     st.session_state['limp_v'] += 1
                     st.success("¡Venta guardada!"); st.rerun()
+            else: st.error("Faltan datos (N° Orden o Cliente)")
 
-  # 2. PESTAÑA EDITAR (Con botón de eliminar SOLO para Admin)
+    # --- 2. PESTAÑA EDITAR / ELIMINAR ---
     with tab_edit:
         if not df_v.empty:
-            # Filtro de seguridad: Admin ve todo, Empleado solo lo suyo
+            # Filtro: Admin ve todo, Empleado solo sus órdenes
             if st.session_state['rol'] == 'admin':
                 opciones_ordenes = df_v['n_orden'].unique().tolist()
             else:
-                filtro_emp = df_v[df_v['empleado'] == st.session_state['usuario']]
-                opciones_ordenes = filtro_emp['n_orden'].unique().tolist()
+                filtro_mis_v = df_v[df_v['empleado'] == st.session_state['usuario']]
+                opciones_ordenes = filtro_mis_v['n_orden'].unique().tolist()
 
             if opciones_ordenes:
-                ord_s = st.selectbox("Seleccione N° de Orden para gestionar:", ["Seleccionar..."] + opciones_ordenes)
-                
+                ord_s = st.selectbox("Seleccione N° de Orden:", ["Seleccionar..."] + opciones_ordenes)
                 if ord_s != "Seleccionar...":
-                    d = df_v[df_v['n_orden'] == ord_s].iloc[0]
-                    st.info(f"Gestión de Orden: {ord_s} | Cliente: {d['cliente']}")
+                    d = df_v[df_v['n_orden'] == str(ord_s)].iloc[0]
+                    st.info(f"Orden de: {d['cliente']} | Registrada por: {d['empleado']}")
                     
-                    # Campos de edición normales
-                    e_abo = st.number_input("Actualizar Abono ($)", value=float(d['abono']), step=1.0)
-                    e_est = st.selectbox("Actualizar Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
-                                         index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
+                    e_abo = st.number_input("Nuevo Abono ($)", value=float(d['abono']))
+                    e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
                     
-                    col_btn1, col_btn2 = st.columns([2, 1])
+                    if st.button("💾 Actualizar Datos", use_container_width=True):
+                        payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "abono": e_abo, "saldo": float(d['total'])-e_abo, "estado": e_est}
+                        if enviar_google(payload): st.success("Actualizado"); st.rerun()
                     
-                    with col_btn1:
-                        if st.button("💾 Guardar Cambios", use_container_width=True):
-                            nuevo_saldo = float(d['total']) - e_abo
-                            payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "abono": e_abo, "saldo": nuevo_saldo, "estado": e_est}
-                            if enviar_google(payload): 
-                                st.success("¡Orden actualizada!"); st.rerun()
-                    
-                    # --- BOTÓN ELIMINAR: SOLO PARA ADMIN ---
+                    # --- ZONA DE ELIMINAR (SOLO ADMIN) ---
                     if st.session_state['rol'] == 'admin':
-                        with col_btn2:
-                            # Usamos un expander o una confirmación para evitar borrar por error
-                            if st.button("🗑️ ELIMINAR ORDEN", use_container_width=True, help="⚠️ Esta acción no se puede deshacer"):
-                                payload = {"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": ord_s}
+                        st.divider()
+                        with st.expander("🗑️ ZONA DE PELIGRO: Eliminar Orden"):
+                            st.warning(f"¿Seguro que desea borrar la orden {ord_s}?")
+                            confirmar_borrado = st.checkbox("Confirmo que quiero eliminarla permanentemente")
+                            if st.button("ELIMINAR AHORA", disabled=not confirmar_borrado, use_container_width=True):
+                                payload = {"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": str(ord_s)}
                                 if enviar_google(payload):
-                                    st.warning(f"Orden {ord_s} eliminada")
-                                    st.rerun()
+                                    st.warning("Orden eliminada"); st.rerun()
             else:
-                st.warning("No hay órdenes disponibles para tu usuario.")
+                st.warning("No tienes órdenes para gestionar.")
         else:
             st.info("No hay ventas registradas.")
-            
-  # 3. PESTAÑA REPORTES (SOLO ADMIN - Formato compatible Excel)
+
+    # --- 3. PESTAÑA REPORTES (SOLO ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tab_rep:
             if not df_v.empty:
-                st.subheader("💰 Balance de Caja")
                 emp_l = ["Todos"] + df_v['empleado'].unique().tolist()
-                sel_e = st.selectbox("Seleccione empleado para el balance:", emp_l)
-                
+                sel_e = st.selectbox("Balance por empleado:", emp_l)
                 df_f = df_v.copy()
-                if sel_e != "Todos": 
-                    df_f = df_f[df_f['empleado'] == sel_e]
+                if sel_e != "Todos": df_f = df_f[df_f['empleado'] == sel_e]
                 
-                # Métricas numéricas
+                # Métricas
                 v_t = pd.to_numeric(df_f['total'], errors='coerce').sum()
                 a_t = pd.to_numeric(df_f['abono'], errors='coerce').sum()
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Ventas Totales", f"$ {v_t:,.0f}")
+                c2.metric("Abonos", f"$ {a_t:,.0f}")
+                c3.metric("Por Cobrar", f"$ {v_t - a_t:,.0f}")
                 
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Ventas Totales", f"$ {v_t:,.0f}")
-                m2.metric("Abonos Recibidos", f"$ {a_t:,.0f}")
-                m3.metric("Saldo por Cobrar", f"$ {v_t - a_t:,.0f}")
-                
-                # --- GENERACIÓN DE EXCEL SEGURO (Formato HTML-XLS) ---
-                # Este formato lo abre Excel directo y no requiere instalar nada nuevo
+                # Generar Excel (Formato compatible)
                 html_table = df_f.to_html(index=False)
-                # Agregamos una cabecera para que Excel sepa que es una hoja de cálculo
-                excel_format = f"""
-                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-                <head><meta charset="utf-8"></head>
-                <body>{html_table}</body>
-                </html>
-                """
-                
-                st.download_button(
-                    label=f"🟢 Descargar Reporte para Excel - {sel_e}",
-                    data=excel_format,
-                    file_name=f"Reporte_{sel_e}_{datetime.now().strftime('%Y-%m-%d')}.xls",
-                    mime="application/vnd.ms-excel",
-                    use_container_width=True
-                )
-            else:
-                st.info("No hay datos para generar reportes.")
-    # --- TABLA GENERAL (Buscador inferior) ---
+                excel_data = f'<html><head><meta charset="utf-8"></head><body>{html_table}</body></html>'
+                st.download_button(f"🟢 Descargar Excel de {sel_e}", excel_data, f"Reporte_{sel_e}.xls", "application/vnd.ms-excel", use_container_width=True)
+
+    # --- VISUALIZACIÓN DE TABLA GENERAL ---
     st.divider()
-    busq = st.text_input("🔍 Buscador rápido (Orden o Cliente)")
+    busq = st.text_input("🔍 Buscar Orden o Cliente en la lista")
     df_m = df_v.copy().iloc[::-1]
     
-    # El empleado SOLO ve sus propias ventas en la tabla inferior
-    if st.session_state['rol'] != 'admin': 
+    # Filtro visual: Empleados solo ven lo suyo abajo
+    if st.session_state['rol'] != 'admin':
         df_m = df_m[df_m['empleado'] == st.session_state['usuario']]
     
-    if busq: 
+    if busq:
         df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
     
     st.dataframe(df_m, use_container_width=True, hide_index=True)
