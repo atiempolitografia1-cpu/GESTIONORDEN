@@ -146,52 +146,51 @@ elif opcion == "Ventas":
                     st.session_state['limp_v'] += 1
                     st.success("¡Venta guardada!"); st.rerun()
 
-   # 2. PESTAÑA EDITAR (Con filtro de autoría para empleados)
+  # 2. PESTAÑA EDITAR (Con botón de eliminar SOLO para Admin)
     with tab_edit:
         if not df_v.empty:
-            # --- FILTRO DE SEGURIDAD PARA EDICIÓN ---
+            # Filtro de seguridad: Admin ve todo, Empleado solo lo suyo
             if st.session_state['rol'] == 'admin':
-                # El admin ve todas las órdenes
                 opciones_ordenes = df_v['n_orden'].unique().tolist()
             else:
-                # El empleado SOLO ve las órdenes donde su nombre aparece en la columna 'empleado'
-                filtro_mis_ordenes = df_v[df_v['empleado'] == st.session_state['usuario']]
-                opciones_ordenes = filtro_mis_ordenes['n_orden'].unique().tolist()
+                filtro_emp = df_v[df_v['empleado'] == st.session_state['usuario']]
+                opciones_ordenes = filtro_emp['n_orden'].unique().tolist()
 
             if opciones_ordenes:
-                ord_s = st.selectbox("Seleccione N° de Orden para editar:", ["Seleccionar..."] + opciones_ordenes)
+                ord_s = st.selectbox("Seleccione N° de Orden para gestionar:", ["Seleccionar..."] + opciones_ordenes)
                 
                 if ord_s != "Seleccionar...":
-                    # Extraemos los datos de la orden seleccionada
                     d = df_v[df_v['n_orden'] == ord_s].iloc[0]
+                    st.info(f"Gestión de Orden: {ord_s} | Cliente: {d['cliente']}")
                     
-                    st.info(f"Editando orden de: {d['cliente']} (Registrada por: {d['empleado']})")
-                    
-                    e_abo = st.number_input("Nuevo Abono ($)", value=float(d['abono']), step=1.0)
-                    e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
+                    # Campos de edición normales
+                    e_abo = st.number_input("Actualizar Abono ($)", value=float(d['abono']), step=1.0)
+                    e_est = st.selectbox("Actualizar Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
                                          index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
                     
-                    if st.button("Actualizar Registro", use_container_width=True):
-                        # Calculamos el nuevo saldo automáticamente
-                        nuevo_saldo = float(d['total']) - e_abo
-                        
-                        payload = {
-                            "accion": "actualizar", 
-                            "tipo_registro": "ventas", 
-                            "id_busqueda": ord_s, 
-                            "abono": e_abo, 
-                            "saldo": nuevo_saldo, 
-                            "estado": e_est
-                        }
-                        
-                        if enviar_google(payload): 
-                            st.success(f"✅ Orden {ord_s} actualizada correctamente")
-                            st.rerun()
+                    col_btn1, col_btn2 = st.columns([2, 1])
+                    
+                    with col_btn1:
+                        if st.button("💾 Guardar Cambios", use_container_width=True):
+                            nuevo_saldo = float(d['total']) - e_abo
+                            payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "abono": e_abo, "saldo": nuevo_saldo, "estado": e_est}
+                            if enviar_google(payload): 
+                                st.success("¡Orden actualizada!"); st.rerun()
+                    
+                    # --- BOTÓN ELIMINAR: SOLO PARA ADMIN ---
+                    if st.session_state['rol'] == 'admin':
+                        with col_btn2:
+                            # Usamos un expander o una confirmación para evitar borrar por error
+                            if st.button("🗑️ ELIMINAR ORDEN", use_container_width=True, help="⚠️ Esta acción no se puede deshacer"):
+                                payload = {"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": ord_s}
+                                if enviar_google(payload):
+                                    st.warning(f"Orden {ord_s} eliminada")
+                                    st.rerun()
             else:
-                st.warning("No tienes órdenes registradas para editar.")
+                st.warning("No hay órdenes disponibles para tu usuario.")
         else:
-            st.info("No hay ventas registradas en el sistema.")
-
+            st.info("No hay ventas registradas.")
+            
   # 3. PESTAÑA REPORTES (SOLO ADMIN - Formato compatible Excel)
     if st.session_state['rol'] == 'admin':
         with tab_rep:
