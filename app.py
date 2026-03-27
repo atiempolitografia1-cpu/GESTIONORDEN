@@ -106,12 +106,21 @@ if opcion == "Gestión de Empleados":
                 if enviar_google(payload): st.success("Actualizado"); st.rerun()
 
 # --- SECCIÓN: VENTAS ---
+# --- SECCIÓN: VENTAS (CON PESTAÑA DE REPORTES PRIVADA) ---
 elif opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v = leer_datos("ventas")
     
-    tab_reg, tab_edit, tab_rep = st.tabs(["📝 Registrar", "✏️ Editar", "📊 Reportes"])
+    # Definimos qué pestañas mostrar según el ROL
+    if st.session_state['rol'] == 'admin':
+        tabs = st.tabs(["📝 Registrar", "✏️ Editar", "📊 Reportes"])
+        tab_reg, tab_edit, tab_rep = tabs
+    else:
+        # El empleado NO ve la pestaña de Reportes
+        tabs = st.tabs(["📝 Registrar", "✏️ Editar"])
+        tab_reg, tab_edit = tabs
 
+    # 1. PESTAÑA REGISTRAR (Todos la ven)
     with tab_reg:
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
@@ -130,43 +139,61 @@ elif opcion == "Ventas":
             v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+vs)
             v_pag = st.selectbox("Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="p"+vs)
 
-        if st.button("💾 GUARDAR VENTA"):
+        if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
                 payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": "", "factura": v_fac}
-                if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("Guardado"); st.rerun()
+                if enviar_google(payload): 
+                    st.session_state['limp_v'] += 1
+                    st.success("¡Venta guardada!"); st.rerun()
 
+    # 2. PESTAÑA EDITAR (Todos la ven)
     with tab_edit:
         if not df_v.empty:
-            ord_s = st.selectbox("N° Orden a editar:", ["..."] + df_v['n_orden'].unique().tolist())
-            if ord_s != "...":
+            ord_s = st.selectbox("N° Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].unique().tolist())
+            if ord_s != "Seleccionar...":
                 d = df_v[df_v['n_orden'] == ord_s].iloc[0]
                 e_abo = st.number_input("Nuevo Abono", value=float(d['abono']))
                 e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
-                if st.button("Actualizar"):
+                if st.button("Actualizar Registro"):
                     payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "abono": e_abo, "saldo": float(d['total'])-e_abo, "estado": e_est}
                     if enviar_google(payload): st.success("Actualizado"); st.rerun()
 
-    with tab_rep:
-        if not df_v.empty:
-            emp_l = ["Todos"] + df_v['empleado'].unique().tolist()
-            sel_e = st.selectbox("Filtrar por empleado:", emp_l)
-            df_f = df_v.copy()
-            if sel_e != "Todos": df_f = df_f[df_f['empleado'] == sel_e]
-            
-            # Métricas numéricas
-            v_t = pd.to_numeric(df_f['total']).sum()
-            a_t = pd.to_numeric(df_f['abono']).sum()
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Ventas", f"$ {v_t:,.0f}")
-            m2.metric("Abonos", f"$ {a_t:,.0f}")
-            m3.metric("Saldo", f"$ {v_t - a_t:,.0f}")
-            
-            csv = df_f.to_csv(index=False).encode('utf-8-sig')
-            st.download_button(f"📥 Descargar reporte {sel_e}", csv, f"Ventas_{sel_e}.csv", "text/csv", use_container_width=True)
+    # 3. PESTAÑA REPORTES (SOLO ADMIN)
+    if st.session_state['rol'] == 'admin':
+        with tab_rep:
+            if not df_v.empty:
+                st.subheader("💰 Balance de Caja")
+                emp_l = ["Todos"] + df_v['empleado'].unique().tolist()
+                sel_e = st.selectbox("Seleccione empleado para el balance:", emp_l)
+                
+                df_f = df_v.copy()
+                if sel_e != "Todos": 
+                    df_f = df_f[df_f['empleado'] == sel_e]
+                
+                # Métricas
+                v_t = pd.to_numeric(df_f['total'], errors='coerce').sum()
+                a_t = pd.to_numeric(df_f['abono'], errors='coerce').sum()
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Ventas Totales", f"$ {v_t:,.0f}")
+                m2.metric("Abonos Recibidos", f"$ {a_t:,.0f}")
+                m3.metric("Saldo por Cobrar", f"$ {v_t - a_t:,.0f}")
+                
+                # Descarga
+                csv = df_f.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(f"📥 Descargar Reporte de {sel_e}", csv, f"Reporte_{sel_e}.csv", "text/csv", use_container_width=True)
+            else:
+                st.info("No hay datos para generar reportes.")
 
+    # --- TABLA GENERAL (Buscador inferior) ---
     st.divider()
-    busq = st.text_input("🔍 Buscar orden o cliente")
+    busq = st.text_input("🔍 Buscador rápido (Orden o Cliente)")
     df_m = df_v.copy().iloc[::-1]
-    if st.session_state['rol'] != 'admin': df_m = df_m[df_m['empleado'] == st.session_state['usuario']]
-    if busq: df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
+    
+    # El empleado SOLO ve sus propias ventas en la tabla inferior
+    if st.session_state['rol'] != 'admin': 
+        df_m = df_m[df_m['empleado'] == st.session_state['usuario']]
+    
+    if busq: 
+        df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
+    
     st.dataframe(df_m, use_container_width=True, hide_index=True)
