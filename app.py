@@ -193,6 +193,7 @@ elif opcion == "Ventas":
             st.info("No hay ventas registradas en el sistema.")
 
     # 3. PESTAÑA REPORTES (SOLO ADMIN)
+   # 3. PESTAÑA REPORTES (SOLO ADMIN - Versión Excel Real)
     if st.session_state['rol'] == 'admin':
         with tab_rep:
             if not df_v.empty:
@@ -212,12 +213,32 @@ elif opcion == "Ventas":
                 m2.metric("Abonos Recibidos", f"$ {a_t:,.0f}")
                 m3.metric("Saldo por Cobrar", f"$ {v_t - a_t:,.0f}")
                 
-                # Descarga
-                csv = df_f.to_csv(index=False).encode('utf-8-sig')
-                st.download_button(f"📥 Descargar Reporte de {sel_e}", csv, f"Reporte_{sel_e}.csv", "text/csv", use_container_width=True)
+                # --- LÓGICA PARA GENERAR EXCEL REAL (.xlsx) ---
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    # Convertimos el DataFrame a una hoja de Excel
+                    df_f.to_excel(writer, index=False, sheet_name='Reporte_Ventas')
+                    
+                    # Ajustes automáticos de formato (Opcional pero ayuda mucho)
+                    workbook  = writer.book
+                    worksheet = writer.sheets['Reporte_Ventas']
+                    
+                    # Formato para que se vea limpio
+                    header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC', 'border': 1})
+                    for col_num, value in enumerate(df_f.columns.values):
+                        worksheet.write(0, col_num, value, header_format)
+                        worksheet.set_column(col_num, col_num, 15) # Ancho de columnas
+
+                # Botón de descarga
+                st.download_button(
+                    label=f"🟢 Descargar Reporte en EXCEL (.xlsx) - {sel_e}",
+                    data=buffer.getvalue(),
+                    file_name=f"Reporte_{sel_e}_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
             else:
                 st.info("No hay datos para generar reportes.")
-
     # --- TABLA GENERAL (Buscador inferior) ---
     st.divider()
     busq = st.text_input("🔍 Buscador rápido (Orden o Cliente)")
