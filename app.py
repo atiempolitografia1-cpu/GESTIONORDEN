@@ -192,8 +192,7 @@ elif opcion == "Ventas":
         else:
             st.info("No hay ventas registradas en el sistema.")
 
-    # 3. PESTAÑA REPORTES (SOLO ADMIN)
-   # 3. PESTAÑA REPORTES (SOLO ADMIN - Versión Excel Real)
+  # 3. PESTAÑA REPORTES (SOLO ADMIN - Formato compatible Excel)
     if st.session_state['rol'] == 'admin':
         with tab_rep:
             if not df_v.empty:
@@ -205,36 +204,31 @@ elif opcion == "Ventas":
                 if sel_e != "Todos": 
                     df_f = df_f[df_f['empleado'] == sel_e]
                 
-                # Métricas
+                # Métricas numéricas
                 v_t = pd.to_numeric(df_f['total'], errors='coerce').sum()
                 a_t = pd.to_numeric(df_f['abono'], errors='coerce').sum()
+                
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Ventas Totales", f"$ {v_t:,.0f}")
                 m2.metric("Abonos Recibidos", f"$ {a_t:,.0f}")
                 m3.metric("Saldo por Cobrar", f"$ {v_t - a_t:,.0f}")
                 
-                # --- LÓGICA PARA GENERAR EXCEL REAL (.xlsx) ---
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    # Convertimos el DataFrame a una hoja de Excel
-                    df_f.to_excel(writer, index=False, sheet_name='Reporte_Ventas')
-                    
-                    # Ajustes automáticos de formato (Opcional pero ayuda mucho)
-                    workbook  = writer.book
-                    worksheet = writer.sheets['Reporte_Ventas']
-                    
-                    # Formato para que se vea limpio
-                    header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC', 'border': 1})
-                    for col_num, value in enumerate(df_f.columns.values):
-                        worksheet.write(0, col_num, value, header_format)
-                        worksheet.set_column(col_num, col_num, 15) # Ancho de columnas
-
-                # Botón de descarga
+                # --- GENERACIÓN DE EXCEL SEGURO (Formato HTML-XLS) ---
+                # Este formato lo abre Excel directo y no requiere instalar nada nuevo
+                html_table = df_f.to_html(index=False)
+                # Agregamos una cabecera para que Excel sepa que es una hoja de cálculo
+                excel_format = f"""
+                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                <head><meta charset="utf-8"></head>
+                <body>{html_table}</body>
+                </html>
+                """
+                
                 st.download_button(
-                    label=f"🟢 Descargar Reporte en EXCEL (.xlsx) - {sel_e}",
-                    data=buffer.getvalue(),
-                    file_name=f"Reporte_{sel_e}_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    label=f"🟢 Descargar Reporte para Excel - {sel_e}",
+                    data=excel_format,
+                    file_name=f"Reporte_{sel_e}_{datetime.now().strftime('%Y-%m-%d')}.xls",
+                    mime="application/vnd.ms-excel",
                     use_container_width=True
                 )
             else:
