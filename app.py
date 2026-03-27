@@ -9,7 +9,7 @@ st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
 st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "TU_URL_DE_GOOGLE_APPS_SCRIPT_AQUI" # <--- PEGA TU URL AQUÍ
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyqx3mQopxUsMjokkhejP1newA3Gv-0OySPGFLhgGNlG6wgRPSieC3wlWO8QawQ6DRQXg/exec" # <--- PEGA TU URL AQUÍ
 
 def leer_datos(pestana):
     try:
