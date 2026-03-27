@@ -1,32 +1,26 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import io
 import requests
+import io
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Gestión Litografía Pro", layout="wide")
 
-# ID DE TU HOJA (Ya configurado)
+# DATOS DE CONEXIÓN
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxOEP-5jAU8RE76-5DsUp2iyn_zXr54kEXY0_H3Dw-BNqPSW5-1W_oGlr48W94o-RqLSA/exec"
 
-# Función para leer datos de Google Sheets sin errores 400
 def traer_datos(pestana):
     try:
-        # Forzamos la descarga como CSV de la pestaña específica
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return pd.read_csv(io.StringIO(response.text))
-        else:
-            st.error(f"Error de Google: {response.status_code}")
-            st.stop()
-    except Exception as e:
-        st.error(f"⚠️ Error al conectar con la pestaña '{pestana}'")
-        st.info("Asegúrate de haber ido a: Archivo > Compartir > Publicar en la Web > Publicar")
+        res = requests.get(url)
+        return pd.read_csv(io.StringIO(res.text))
+    except:
+        st.error(f"Error al conectar con la pestaña {pestana}")
         st.stop()
 
-# --- INICIO: CARGA DE USUARIOS ---
+# --- CARGA INICIAL ---
 df_usuarios = traer_datos("usuarios")
 
 if 'autenticado' not in st.session_state:
@@ -34,82 +28,96 @@ if 'autenticado' not in st.session_state:
 
 # --- PANTALLA DE LOGIN ---
 if not st.session_state['autenticado']:
-    st.title("🔐 Acceso Litografía")
-    u_log = st.selectbox("Usuario", df_usuarios['nombre'].tolist())
+    st.title("🔐 Sistema de Gestión - Litografía")
+    u_log = st.selectbox("Seleccione su Usuario", df_usuarios['nombre'].tolist())
     p_log = st.text_input("Contraseña", type="password")
+    
     if st.button("INGRESAR", use_container_width=True):
         user_row = df_usuarios[df_usuarios['nombre'] == u_log].iloc[0]
         if str(user_row['clave']) == p_log:
             st.session_state.update({"autenticado": True, "usuario": u_log, "rol": user_row['rol']})
             st.rerun()
-        else: st.error("Contraseña incorrecta")
+        else:
+            st.error("Contraseña incorrecta")
     st.stop()
 
-# --- MENÚ LATERAL ---
+# --- MENÚ PRINCIPAL ---
 st.sidebar.title(f"👤 {st.session_state['usuario']}")
-menu_opciones = ["Ventas"]
+opciones = ["Ventas"]
 if st.session_state['rol'] == 'admin':
-    menu_opciones.append("Gestión de Empleados")
+    opciones.append("Gestión de Empleados")
 
-opcion = st.sidebar.radio("Ir a:", menu_opciones)
+opcion = st.sidebar.radio("Navegación", opciones)
 
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- SECCIÓN: VENTAS (TU ESTRUCTURA ORIGINAL) ---
+# --- MÓDULO DE VENTAS ---
 if opcion == "Ventas":
-    st.title("🚀 Gestión de Ventas e Inventario")
-    tab_reg, tab_edit = st.tabs(["📝 Registrar Nueva Orden", "✏️ Actualizar Orden"])
+    st.title("🚀 Registro de Órdenes")
+    tab_reg, tab_hist = st.tabs(["📝 Nueva Orden", "📊 Historial Completo"])
 
     with tab_reg:
-        with st.form("nueva_venta", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            with c1:
+        with st.form("form_venta", clear_on_submit=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
                 n_ord = st.text_input("N° Orden / Factura")
-                v_cli = st.text_input("Nombre del Cliente")
-                v_nit = st.text_input("NIT o Cédula")
-            with c2:
+                v_cli = st.text_input("Nombre Cliente")
+                v_nit = st.text_input("NIT / CC")
+            with col2:
                 v_cel = st.text_input("Celular")
                 v_cor = st.text_input("Correo")
-                v_fac = st.radio("¿Factura?", ["SÍ", "NO"], horizontal=True)
-            with c3:
+                v_fac = st.radio("¿Requiere Factura?", ["SÍ", "NO"], horizontal=True)
+            with col3:
                 v_tot = st.number_input("Valor Total ($)", min_value=0.0)
                 v_abo = st.number_input("Abono Inicial ($)", min_value=0.0)
                 v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"])
-                v_pag = st.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+                v_pag = st.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA", "TRANSFERENCIA"])
             
-            v_desc = st.text_area("Descripción del trabajo")
+            v_desc = st.text_area("Descripción detallada (Cantidades, medidas, material...)")
             
-            if st.form_submit_button("💾 GUARDAR ORDEN", use_container_width=True):
-                # NOTA: Para guardar usaremos un sistema de Google Apps Script 
-                # (Te lo explicaré apenas logremos que entres a la app)
-                st.success("¡Datos capturados correctamente! (Conexión de escritura pendiente)")
+            if st.form_submit_button("💾 GUARDAR ORDEN EN EXCEL", use_container_width=True):
+                # Preparar datos para enviar
+                datos_venta = {
+                    "fecha": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "n_orden": str(n_ord),
+                    "descripcion": v_desc,
+                    "total": float(v_tot),
+                    "abono": float(v_abo),
+                    "saldo": float(v_tot - v_abo),
+                    "metodo_pago": v_pag,
+                    "estado": v_est,
+                    "empleado": st.session_state['usuario'],
+                    "cliente": v_cli,
+                    "nit": v_nit,
+                    "celular": v_cel,
+                    "correo": v_cor,
+                    "factura": v_fac
+                }
+                
+                try:
+                    r = requests.post(URL_SCRIPT, json=datos_venta)
+                    if r.status_code == 200:
+                        st.success(f"✅ ¡Orden {n_ord} guardada exitosamente!")
+                        st.balloons()
+                    else:
+                        st.error("Error al guardar. Revisa la conexión con Google.")
+                except Exception as e:
+                    st.error(f"Fallo crítico: {e}")
 
-    with tab_edit:
-        st.subheader("Modificar Orden Existente")
-        df_edit = traer_datos("ventas")
-        if not df_edit.empty:
-            search_edit = st.text_input("Buscar por Orden o Cliente")
-            if search_edit:
-                df_edit = df_edit[df_edit['n_orden'].astype(str).str.contains(search_edit, case=False)]
+    with tab_hist:
+        st.subheader("Buscador de Historial")
+        df_hist = traer_datos("ventas")
+        if not df_hist.empty:
+            busqueda = st.text_input("Buscar por Cliente, NIT o N° Orden")
+            if busqueda:
+                df_hist = df_hist[df_hist.apply(lambda row: busqueda.lower() in row.astype(str).str.lower().values, axis=1)]
             
-            if not df_edit.empty:
-                ord_sel = st.selectbox("Seleccione Orden:", df_edit['n_orden'].tolist())
-                # Lógica de edición aquí...
-                st.info("Módulo de edición cargado.")
+            st.dataframe(df_hist, use_container_width=True, hide_index=True)
 
-    st.divider()
-    st.subheader("🔍 Historial y Buscador")
-    df_ver = traer_datos("ventas")
-    if not df_ver.empty:
-        if st.session_state['rol'] != 'admin':
-            df_ver = df_ver[df_ver['empleado'] == st.session_state['usuario']]
-        st.dataframe(df_ver, use_container_width=True, hide_index=True)
-
-# --- SECCIÓN: EMPLEADOS ---
+# --- MÓDULO GESTIÓN (ADMIN) ---
 elif opcion == "Gestión de Empleados":
-    st.title("👥 Gestión de Personal")
-    df_u = traer_datos("usuarios")
-    st.table(df_u[['nombre', 'rol']])
-    # Formulario para nuevos empleados aquí...
+    st.title("👥 Personal de Litografía")
+    st.dataframe(traer_datos("usuarios"), use_container_width=True)
+    st.info("Para agregar nuevos empleados, edita directamente la pestaña 'usuarios' en tu Google Sheets.")
