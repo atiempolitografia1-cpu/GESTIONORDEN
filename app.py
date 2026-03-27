@@ -138,6 +138,38 @@ if opcion == "Gestión de Empleados":
 
 # --- SECCIÓN: VENTAS ---
 elif opcion == "Ventas":
+    st.divider()
+    st.subheader("📊 Reportes y Consultas")
+    
+    # 1. Filtro por Empleado para la descarga
+    empleados_lista = ["Todos"] + df_t['empleado'].unique().tolist()
+    emp_sel = st.selectbox("Filtrar reporte por empleado:", empleados_lista)
+    
+    # 2. Aplicamos el filtro al DataFrame que se va a descargar
+    df_descarga = df_t.copy()
+    if emp_sel != "Todos":
+        df_descarga = df_descarga[df_descarga['empleado'] == emp_sel]
+    
+    # 3. Convertimos el DataFrame a CSV (formato universal)
+    csv = df_descarga.to_csv(index=False).encode('utf-8-sig') # utf-8-sig para que Excel lea bien los tildes
+    
+    # 4. Botón de descarga
+    nombre_archivo = f"Ventas_{emp_sel}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    st.download_button(
+        label=f"📥 Descargar ventas de: {emp_sel}",
+        data=csv,
+        file_name=nombre_archivo,
+        mime='text/csv',
+        use_container_width=True
+    )
+
+    # El buscador que ya tenías (opcional, puedes dejarlo abajo)
+    search = st.text_input("🔍 Buscar en la tabla actual (Orden, Cliente o NIT)")
+    if search:
+        df_t = df_t[df_t.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+    
+    st.dataframe(df_t, use_container_width=True, hide_index=True)
     st.title("🚀 Gestión de Ventas")
     tab_reg, tab_edit = st.tabs(["📝 Registrar Nueva", "✏️ Editar Orden"])
 
