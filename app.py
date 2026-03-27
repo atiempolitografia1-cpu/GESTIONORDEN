@@ -11,6 +11,15 @@ st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
 URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyqx3mQopxUsMjokkhejP1newA3Gv-0OySPGFLhgGNlG6wgRPSieC3wlWO8QawQ6DRQXg/exec" # <--- PEGA TU URL AQUÍ
 
+df_usuarios = leer_datos("usuarios")
+
+# --- AÑADE ESTA LÍNEA AQUÍ ---
+if not df_usuarios.empty:
+    df_usuarios.columns = df_usuarios.columns.str.strip().str.lower()
+# -----------------------------
+
+if not st.session_state['logueado']:
+    # ... resto del código
 def leer_datos(pestana):
     try:
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
@@ -27,15 +36,7 @@ def enviar_google(payload):
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 
 df_users_db = leer_datos("usuarios")
-df_usuarios = leer_datos("usuarios")
 
-# --- AÑADE ESTA LÍNEA AQUÍ ---
-if not df_usuarios.empty:
-    df_usuarios.columns = df_usuarios.columns.str.strip().str.lower()
-# -----------------------------
-
-if not st.session_state['logueado']:
-    # ... resto del código
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     if not df_users_db.empty:
