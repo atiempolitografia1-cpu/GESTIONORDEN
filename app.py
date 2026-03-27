@@ -7,15 +7,20 @@ from datetime import datetime
 st.set_page_config(page_title="Gestión Litografía Pro", layout="wide")
 
 # Conexión a Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error("Error al inicializar la conexión. Revisa los Secrets.")
+    st.stop()
 
 def traer_datos(pestana):
     try:
-        # ttl=0 obliga a la app a leer el Excel real cada vez, sin usar copias viejas
+        # Intentamos leer la pestaña con un tiempo de espera
         return conn.read(worksheet=pestana, ttl=0)
     except Exception as e:
-        st.error(f"⚠️ Error al conectar con la pestaña '{pestana}' de Google Sheets.")
-        st.info("Verifica que el permiso en Google sea 'Cualquier persona con el enlace puede EDITAR'.")
+        st.error(f"⚠️ Error al leer la pestaña '{pestana}'.")
+        st.info("Esto sucede si el nombre de la pestaña en Excel no es EXACTAMENTE igual o si falta el permiso de Editor.")
+        st.write(f"Detalle técnico: {e}") # Esto nos dirá el error real
         st.stop()
 
 # --- CARGA INICIAL ---
