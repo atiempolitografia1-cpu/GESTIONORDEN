@@ -16,36 +16,32 @@ if 'autenticado' not in st.session_state: st.session_state['autenticado'] = Fals
 if 'usuario' not in st.session_state: st.session_state['usuario'] = ""
 if 'rol' not in st.session_state: st.session_state['rol'] = ""
 
+# --- FUNCIÓN DE LECTURA SIN CACHÉ ---
 def leer_datos(pestana):
     try:
-        # Usamos un timestamp (?t=...) para que Google no nos de datos viejos (caché)
+        # El parámetro 't' con microsegundos rompe el caché de Google
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text))
         
         if df.empty:
-            if pestana == "usuarios": return pd.DataFrame(columns=['nombre', 'clave', 'rol'])
-            return pd.DataFrame()
+            return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
 
-        # ASIGNACIÓN POR POSICIÓN: No importa cómo se llamen en Excel, 
-        # las tomamos como Nombre, Clave y Rol.
+        # Forzar nombres de columnas por posición (A, B, C...)
         if pestana == "usuarios":
-            columnas_fijas = ['nombre', 'clave', 'rol']
-            df.columns = columnas_fijas + list(df.columns[len(columnas_fijas):])
+            columnas_base = ['nombre', 'clave', 'rol']
+            # Mapeamos solo las que existan para evitar errores
+            df.columns = columnas_base + list(df.columns[len(columnas_base):])
         elif pestana == "ventas":
             cols_v = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura']
             df.columns = cols_v + list(df.columns[len(cols_v):])
 
-        # Limpieza total: convertir a texto y quitar espacios invisibles
-        df = df.applymap(lambda x: str(x).strip() if pd.notnull(x) else "")
-        
-        # Eliminar filas que sean una repetición de los títulos (por si acaso)
-        df = df[df.iloc[:,0].astype(str).lower() != df.columns[0].lower()]
-        
+        # Limpiar datos: Texto plano, sin espacios, sin filas repetidas
+        df = df.astype(str).apply(lambda x: x.str.strip())
+        df = df[df.iloc[:,0].str.lower() != df.columns[0].lower()]
         return df
-    except Exception as e:
-        if pestana == "usuarios": return pd.DataFrame(columns=['nombre', 'clave', 'rol'])
-        return pd.DataFrame()
+    except:
+        return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
 
 def enviar_google(payload):
     try:
@@ -53,51 +49,45 @@ def enviar_google(payload):
         return res.status_code == 200
     except: return False
 
-# --- LOGIN SISTEMA ---
-df_users_db = leer_datos("usuarios")
+# --- LOGIN COMPLETO ---
+# Leemos los usuarios reales del Excel
+df_real = leer_datos("usuarios")
 
-# SEGURIDAD: Si el Excel no trae al Administrador, lo agregamos manualmente a la lista
-# para que nunca te quedes por fuera del sistema.
-admin_en_lista = False
-if not df_users_db.empty:
-    admin_en_lista = "administrador" in df_users_db['nombre'].str.lower().tolist()
+# Creamos al Administrador de emergencia
+admin_emergencia = pd.DataFrame([{'nombre': 'Administrador', 'clave': 'admin123', 'rol': 'admin'}])
 
-if not admin_en_lista:
-    admin_provisional = pd.DataFrame([{'nombre': 'Administrador', 'clave': 'admin123', 'rol': 'admin'}])
-    df_users_db = pd.concat([df_users_db, admin_provisional], ignore_index=True)
+# FUSIONAMOS: Si el administrador real ya está en el Excel, usamos ese. 
+# Si no está, sumamos el de emergencia.
+if not df_real.empty and 'administrador' in df_real['nombre'].str.lower().values:
+    df_users_db = df_real
+else:
+    df_users_db = pd.concat([df_real, admin_emergencia], ignore_index=True).drop_duplicates(subset=['nombre'])
 
-# Pantalla de Login si no está autenticado
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
-    # Filtramos la lista para que no salgan valores vacíos (nan)
-    u_list = [u for u in df_users_db['nombre'].unique().tolist() if str(u).lower() != 'nan' and u != '']
-    
-    if u_list:
-        u_input = st.selectbox("Seleccione su Usuario", u_list)
+    # Lista limpia para el selector
+    opciones_usuario = df_users_db['nombre'].unique().tolist()
+    opciones_usuario = [u for u in opciones_usuario if u.lower() != 'nan' and u != ""]
+
+    if opciones_usuario:
+        u_input = st.selectbox("Seleccione su Usuario", opciones_usuario)
         p_input = st.text_input("Contraseña", type="password")
         
         if st.button("INGRESAR", use_container_width=True):
-            # Buscar el usuario seleccionado en nuestra tabla fusionada
-            user_match = df_users_db[df_users_db['nombre'] == u_input]
-            
-            if not user_match.empty:
-                user_data = user_match.iloc[0]
-                # Comparación estricta de contraseña
-                if str(user_data['clave']) == str(p_input):
-                    st.session_state.update({
-                        "autenticado": True, 
-                        "usuario": u_input, 
-                        "rol": str(user_data['rol']).lower()
-                    })
-                    st.success(f"Bienvenido {u_input}")
-                    st.rerun()
-                else:
-                    st.error("Contraseña incorrecta")
+            user_data = df_users_db[df_users_db['nombre'] == u_input].iloc[0]
+            if str(user_data['clave']) == str(p_input):
+                st.session_state.update({
+                    "autenticado": True,
+                    "usuario": u_input,
+                    "rol": str(user_data['rol']).lower()
+                })
+                st.rerun()
+            else:
+                st.error("Contraseña incorrecta")
     else:
-        st.error("No hay usuarios disponibles. Revisa la conexión con Google Sheets.")
-    
-    st.stop() # Detiene el resto de la app hasta que se loguee
+        st.error("Error crítico: No se pueden cargar usuarios.")
+    st.stop()
 
 # --- MENÚ LATERAL ---
 st.sidebar.title(f"👤 {st.session_state['usuario']}")
