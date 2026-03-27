@@ -5,112 +5,140 @@ import requests
 import io
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Atiempo Litografía", layout="wide")
+st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
+st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycby1nYVVa-gvt1GumMceDK-IVXqYtcvkyI0Cnr4lCAx_0gBGeU8Vctp96Rh2aOz47uSnFQ/exec"
+URL_SCRIPT = "TU_URL_DE_GOOGLE_APPS_SCRIPT_AQUI" # <--- PEGA TU URL AQUÍ
 
-def leer_datos(nombre_pestana):
+def leer_datos(pestana):
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nombre_pestana}"
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}"
         res = requests.get(url)
-        return pd.read_csv(io.StringIO(res.text))
-    except:
-        return pd.DataFrame()
+        df = pd.read_csv(io.StringIO(res.text))
+        return df
+    except: return pd.DataFrame()
+
+def enviar_google(payload):
+    try: return requests.post(URL_SCRIPT, json=payload)
+    except: return None
 
 # --- LOGIN ---
-if 'logueado' not in st.session_state:
-    st.session_state['logueado'] = False
+if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 
-df_usuarios = leer_datos("usuarios")
+df_users_db = leer_datos("usuarios")
 
-if not st.session_state['logueado']:
-    st.title("🔐 Acceso Atiempo")
-    if not df_usuarios.empty:
-        u_input = st.selectbox("Usuario", df_usuarios['nombre'].tolist())
+if not st.session_state['autenticado']:
+    st.title("🔐 Acceso al Sistema")
+    if not df_users_db.empty:
+        u_input = st.selectbox("Usuario", df_users_db['nombre'].tolist())
         p_input = st.text_input("Contraseña", type="password")
-        if st.button("ENTRAR"):
-            user_row = df_usuarios[df_usuarios['nombre'] == u_input].iloc[0]
-            if str(user_row['clave']) == p_input:
-                st.session_state.update({'logueado': True, 'user': u_input, 'rol': user_row['rol']})
+        if st.button("INGRESAR"):
+            user_data = df_users_db[df_users_db['nombre'] == u_input].iloc[0]
+            if str(user_data['clave']) == p_input:
+                st.session_state.update({"autenticado": True, "usuario": u_input, "rol": user_data['rol']})
                 st.rerun()
-            else: st.error("Clave incorrecta")
+            else: st.error("Contraseña incorrecta")
+    else: st.error("No se pudo cargar la base de datos de usuarios.")
     st.stop()
 
-# --- NAVEGACIÓN ---
-menu = ["Nueva Venta", "Ver Ventas"]
-if st.session_state['rol'] == 'admin':
-    menu.extend(["Gestión de Empleados", "➕ Registrar Empleado"])
+# --- MENÚ LATERAL ---
+st.sidebar.title(f"👤 {st.session_state['usuario']}")
+menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
+opcion = st.sidebar.radio("Ir a:", menu)
 
-choice = st.sidebar.radio("Menú Principal", menu)
-
-# --- SECCIÓN: NUEVA VENTA ---
-if choice == "Nueva Venta":
-    st.header("📝 Registrar Orden de Servicio")
-    with st.form("venta_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            n_orden = st.text_input("N° de Orden")
-            cliente = st.text_input("Nombre del Cliente")
-            nit = st.text_input("NIT / CC")
-            celular = st.text_input("Celular")
-            correo = st.text_input("Correo Electrónico")
-        
-        with col2:
-            descripcion = st.text_area("Descripción del Trabajo")
-            total = st.number_input("Valor Total ($)", min_value=0)
-            abono = st.number_input("Abono Inicial ($)", min_value=0)
-            metodo = st.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "TRANSFERENCIA"])
-            factura = st.radio("¿Requiere Factura?", ["SÍ", "NO"], horizontal=True)
-            estado = st.selectbox("Estado Inicial", ["EN PROCESO", "TERMINADO", "PAGADO"])
-
-        if st.form_submit_button("💾 GUARDAR ORDEN"):
-            if n_orden and cliente:
-                payload = {
-                    "tipo_registro": "ventas",
-                    "fecha": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    "n_orden": n_orden, "descripcion": descripcion,
-                    "total": total, "abono": abono, "saldo": total - abono,
-                    "metodo_pago": metodo, "estado": estado, "empleado": st.session_state['user'],
-                    "cliente": cliente, "nit": nit, "celular": celular, "correo": correo, "factura": factura
-                }
-                res = requests.post(URL_SCRIPT, json=payload)
-                if res.status_code == 200:
-                    st.success(f"✅ Venta {n_orden} guardada")
-                else: st.error("Error al guardar")
-            else: st.warning("Faltan campos obligatorios")
-
-# --- SECCIÓN: VER VENTAS ---
-elif choice == "Ver Ventas":
-    st.header("📋 Historial de Ventas")
-    df_v = leer_datos("ventas")
-    if not df_v.empty:
-        if st.session_state['rol'] != 'admin':
-            df_v = df_v[df_v['empleado'] == st.session_state['user']]
-        st.dataframe(df_v, use_container_width=True, hide_index=True)
+if st.sidebar.button("Cerrar Sesión"):
+    st.session_state['autenticado'] = False
+    st.rerun()
 
 # --- SECCIÓN: GESTIÓN DE EMPLEADOS ---
-elif choice == "Gestión de Empleados":
-    st.header("👥 Lista de Usuarios")
-    st.dataframe(df_usuarios, use_container_width=True)
+if opcion == "Gestión de Empleados":
+    st.title("👥 Administración de Personal")
+    t1, t2 = st.tabs(["➕ Nuevo Empleado", "⚙️ Modificar / Eliminar"])
+    
+    with t1:
+        st.subheader("Registrar nuevo usuario")
+        n_nom = st.text_input("Nombre Completo")
+        n_cla = st.text_input("Contraseña")
+        n_rol = st.selectbox("Rol", ["empleado", "admin"])
+        if st.button("Registrar Empleado"):
+            payload = {"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}
+            if enviar_google(payload): st.success("Empleado registrado"); st.rerun()
+            
+    with t2:
+        st.subheader("Editar datos de empleado")
+        df_u = leer_datos("usuarios")
+        if not df_u.empty:
+            u_sel = st.selectbox("Seleccione el usuario", df_u['nombre'].tolist())
+            user_to_edit = df_u[df_u['nombre'] == u_sel].iloc[0]
+            edit_clave = st.text_input("Nueva Contraseña", value=str(user_to_edit['clave']))
+            edit_rol = st.selectbox("Nuevo Rol", ["empleado", "admin"], index=0 if user_to_edit['rol'] == "empleado" else 1)
+            
+            c_btn1, c_btn2 = st.columns(2)
+            with c_btn1:
+                if st.button("💾 Guardar Cambios"):
+                    payload = {"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": edit_clave, "rol": edit_rol}
+                    enviar_google(payload); st.success("Actualizado"); st.rerun()
+            with c_btn2:
+                if st.button("🗑️ Eliminar Empleado"):
+                    if u_sel != "Administrador":
+                        payload = {"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}
+                        enviar_google(payload); st.warning("Eliminado"); st.rerun()
+                    else: st.error("No puedes eliminar al Admin principal")
 
-# --- SECCIÓN: NUEVO EMPLEADO ---
-elif choice == "➕ Registrar Empleado":
-    st.header("👤 Crear Nuevo Usuario")
-    with st.form("form_nuevo_usuario"):
-        nuevo_nom = st.text_input("Nombre Completo")
-        nueva_clave = st.text_input("Contraseña de Acceso", type="password")
-        nuevo_rol = st.selectbox("Rol del Usuario", ["admin", "vendedor"])
-        
-        if st.form_submit_button("✅ CREAR USUARIO"):
-            if nuevo_nom and nueva_clave:
-                payload_u = {
-                    "tipo_registro": "usuarios",
-                    "nombre": nuevo_nom,
-                    "clave": nueva_clave,
-                    "rol": nuevo_rol
-                }
-                r = requests.post(URL_SCRIPT, json=payload_u)
-                if r.status_code == 200:
-                    st.success(f"Usuario {nuevo_nom} registrado exitosamente.")
-                else: st.error("No se pudo registrar el usuario.")
+# --- SECCIÓN: VENTAS ---
+elif opcion == "Ventas":
+    st.title("🚀 Gestión de Ventas")
+    tab_reg, tab_edit = st.tabs(["📝 Registrar Nueva", "✏️ Editar Orden"])
+
+    with tab_reg:
+        if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
+        vs = str(st.session_state['limp_v'])
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            v_ord = st.text_input("N° Orden", key="o"+vs)
+            v_desc = st.text_area("Descripción", key="d"+vs)
+            v_fac = st.radio("Factura", ["SÍ", "NO"], key="f"+vs, horizontal=True)
+        with c2:
+            v_cli = st.text_input("Nombre Cliente", key="cl"+vs)
+            v_nit = st.text_input("NIT / CC", key="nit"+vs)
+            v_cel = st.text_input("Celular", key="cel"+vs)
+            v_cor = st.text_input("Correo", key="cor"+vs)
+        with c3:
+            v_tot = st.number_input("Total ($)", key="t"+vs)
+            v_abo = st.number_input("Abono ($)", key="a"+vs)
+            v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+vs)
+            v_pag = st.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="p"+vs)
+
+        if st.button("💾 GUARDAR", use_container_width=True):
+            payload = {
+                "accion": "insertar", "tipo_registro": "ventas",
+                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc,
+                "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag,
+                "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli,
+                "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac
+            }
+            if enviar_google(payload): st.session_state['limp_v'] += 1; st.rerun()
+
+    with tab_edit:
+        st.subheader("Actualizar Orden")
+        df_e = leer_datos("ventas")
+        if not df_e.empty:
+            ord_sel = st.selectbox("Seleccione N° de Orden:", ["Seleccionar..."] + df_e['n_orden'].unique().tolist())
+            if ord_sel != "Seleccionar...":
+                d = df_e[df_e['n_orden'].astype(str) == str(ord_sel)].iloc[0]
+                e_abo = st.number_input("Nuevo Abono ($)", value=float(d['abono']))
+                e_est = st.selectbox("Nuevo Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
+                if st.button("Actualizar"):
+                    payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_sel, "abono": e_abo, "saldo": d['total']-e_abo, "estado": e_est}
+                    enviar_google(payload); st.rerun()
+
+    st.divider()
+    search = st.text_input("🔍 Buscar por Orden, Cliente o NIT")
+    df_t = leer_datos("ventas")
+    if not df_t.empty:
+        df_t = df_t.iloc[::-1] # Invertir para ver lo más reciente
+        if st.session_state['rol'] != 'admin': df_t = df_t[df_t['empleado'] == st.session_state['usuario']]
+        if search:
+            df_t = df_t[df_t['n_orden'].astype(str).str.contains(search, case=False) | df_t['cliente'].astype(str).str.contains(search, case=False) | df_t['nit'].astype(str).str.contains(search, case=False)]
+        st.dataframe(df_t, use_container_width=True, hide_index=True)
