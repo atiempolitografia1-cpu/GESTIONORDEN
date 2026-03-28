@@ -9,7 +9,7 @@ st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
 st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzF3sYgCJQ8CNZ-flKFetqxJOGCIdel-nasr6X3cmrN7rvuFGaQtS4SFkeqQAny6OhaSA/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwefjYpHKmQNY6BY9-DXWAxk2GNN6VVeiVDxzr0xV-3Z7Ab9QLwkLulFK5d60rqQCVSSA/exec"
 
 # INICIALIZACIÓN DE SESIÓN SEGURA
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
