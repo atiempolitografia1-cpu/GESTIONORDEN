@@ -53,6 +53,7 @@ def leer_datos(pestana):
         return pd.DataFrame()
 
 # --- 3. LOGIN Y SESIÓN ---
+# --- 3. LOGIN (CON SOPORTE PARA "ENTER") ---
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 
 df_users_db = leer_datos("usuarios")
@@ -61,15 +62,21 @@ if df_users_db.empty:
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
-    u_list = [u for u in df_users_db['nombre'].unique().tolist() if u != ""]
-    u_input = st.selectbox("Usuario", u_list)
-    p_input = st.text_input("Contraseña", type="password")
-    if st.button("INGRESAR", use_container_width=True):
-        match = df_users_db[df_users_db['nombre'] == u_input]
-        if not match.empty and str(match.iloc[0]['clave']).strip() == str(p_input).strip():
-            st.session_state.update({"autenticado": True, "usuario": u_input, "rol": str(match.iloc[0]['rol']).lower()})
-            st.rerun()
-        else: st.error("❌ Datos incorrectos")
+    
+    # Usamos st.form para que el "Enter" funcione automáticamente
+    with st.form("login_form"):
+        u_list = [u for u in df_users_db['nombre'].unique().tolist() if u != ""]
+        u_input = st.selectbox("Usuario", u_list)
+        p_input = st.text_input("Contraseña", type="password")
+        submit_button = st.form_submit_button("INGRESAR", use_container_width=True)
+        
+        if submit_button:
+            match = df_users_db[df_users_db['nombre'] == u_input]
+            if not match.empty and str(match.iloc[0]['clave']).strip() == str(p_input).strip():
+                st.session_state.update({"autenticado": True, "usuario": u_input, "rol": str(match.iloc[0]['rol']).lower()})
+                st.rerun()
+            else:
+                st.error("❌ Datos incorrectos")
     st.stop()
 
 # --- 4. BARRA LATERAL (SIDEBAR) ---
