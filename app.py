@@ -4,13 +4,26 @@ from datetime import datetime
 import requests
 import io
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
+# --- CONFIGURACIÓN VISUAL (CENTRADA Y PROPORCIONAL) ---
+st.set_page_config(
+    page_title="Gestión Negocio Pro", 
+    layout="centered",  # <--- Esto centra el contenido para que no se vea estirado
+    initial_sidebar_state="expanded"
+)
+
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} 
     footer {visibility: hidden;} 
+    header {visibility: hidden;}
     .stDeployButton {display:none;}
+    
+    /* Ajuste de margen superior para mejor estética */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
     /* Esto permite que el botón del sidebar siga siendo clickable */
     section[data-testid="stSidebar"] {
         top: 0;
@@ -38,24 +51,16 @@ def enviar_google(payload):
 # --- 2. FUNCIÓN DE LECTURA BLINDADA ---
 def leer_datos(pestana):
     try:
-        # El microsegundo al final evita que Google te mande datos viejos
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
-        
-        # Leemos el CSV pero forzamos a que TODO sea tratado como string (texto) desde el inicio
         df = pd.read_csv(io.StringIO(res.text), dtype=str)
-        
-        # 1. Quitamos los 'nan' (celdas vacías)
         df = df.fillna('')
-        
-        # 2. Limpieza profunda: quitamos espacios accidentales y aseguramos texto puro
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip()
             
         if df.empty:
             return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
             
-        # Asignamos nombres de columnas fijos
         if pestana == "usuarios":
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
         elif pestana == "ventas":
@@ -88,21 +93,19 @@ if not st.session_state['autenticado']:
         else: st.error("❌ Datos incorrectos")
     st.stop()
 
-# --- MENÚ ---
 # --- MENÚ Y PERFIL EN BARRA LATERAL ---
 with st.sidebar:
-    # Mostramos el nombre del usuario con un diseño llamativo
-    st.markdown(f"### 👤 Usuario: {st.session_state['usuario'].capitalize()}")
-    st.markdown(f"**Rol:** `{st.session_state['rol'].upper()}`")
-    st.divider() # Una línea divisoria para separar el perfil del menú
+    # Identificación del usuario actual
+    st.markdown(f"### 👤 {st.session_state['usuario'].upper()}")
+    st.info(f"Rol: {st.session_state['rol'].capitalize()}")
+    st.divider()
     
-    # El radio button que ya tenías
     menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
-    opcion = st.sidebar.radio("Ir a:", menu)
+    opcion = st.radio("Menú Principal:", menu)
     
-    st.markdown("<br><br>", unsafe_allow_html=True) # Espacio extra
+    st.markdown("<br>"*10, unsafe_allow_html=True)
     
-    if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state['autenticado'] = False
         st.rerun()
 
@@ -161,20 +164,20 @@ elif opcion == "Ventas":
     with tab_reg:
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2) # Usamos 2 columnas para que sea más proporcional en modo centrado
         with c1:
             v_ord = st.text_input("N° Orden", key="o"+vs)
-            v_desc = st.text_area("Descripción", key="d"+vs)
-            v_fac = st.radio("Factura", ["SÍ", "NO"], key="f"+vs, horizontal=True)
-        with c2:
             v_cli = st.text_input("Cliente", key="cl"+vs)
             v_nit = st.text_input("NIT/CC", key="nit"+vs)
             v_cel = st.text_input("Celular", key="cel"+vs)
-        with c3:
+        with c2:
             v_tot = st.number_input("Total ($)", key="t"+vs, min_value=0.0, step=1.0)
             v_abo = st.number_input("Abono Inicial ($)", key="a"+vs, min_value=0.0, step=1.0)
             v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+vs)
             v_pag = st.selectbox("Medio Pago Inicial", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="p"+vs)
+        
+        v_desc = st.text_area("Descripción", key="d"+vs)
+        v_fac = st.radio("Factura", ["SÍ", "NO"], key="f"+vs, horizontal=True)
         
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
@@ -186,7 +189,6 @@ elif opcion == "Ventas":
 
     with tab_edit:
         if not df_v.empty:
-            # Filtro según rol
             if st.session_state['rol'] == 'admin':
                 opciones_o = df_v['n_orden'].unique().tolist()
             else:
@@ -198,28 +200,22 @@ elif opcion == "Ventas":
             if ord_s != "Seleccionar...":
                 d = df_v[df_v['n_orden'] == str(ord_s)].iloc[0]
                 st.subheader(f"🛠️ Editando Orden N° {ord_s}")
-                ce1, ce2, ce3 = st.columns(3)
+                
+                ce1, ce2 = st.columns(2)
                 with ce1:
                     e_cli = st.text_input("Nombre Cliente", value=str(d['cliente']), key="ev_cli")
                     e_nit = st.text_input("NIT / CC", value=str(d['nit']), key="ev_nit")
-                with ce2:
                     e_cel = st.text_input("Celular", value=str(d['celular']), key="ev_cel")
-                    e_fac = st.radio("Factura", ["SÍ", "NO"], index=0 if str(d['factura']) == "SÍ" else 1, horizontal=True, key="ev_fac")
-                with ce3:
-                    e_desc = st.text_area("Descripción Trabajo", value=str(d['descripcion']), key="ev_desc")
-
-                st.divider()
-                ce4, ce5, ce6 = st.columns(3)
-                with ce4:
+                with ce2:
                     e_total = st.number_input("Valor Total ($)", value=float(pd.to_numeric(d['total'], errors='coerce') or 0.0), key="ev_tot")
                     v_abono_prev = float(pd.to_numeric(d['abono'], errors='coerce') or 0.0)
-                    st.info(f"Abonado: ${v_abono_prev:,.0f}")
-                with ce5:
-                    nuevo_pago = st.number_input("Nuevo abono hoy ($)", min_value=0.0, key="ev_nue")
-                    medio_pago = st.selectbox("Medio", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="ev_med")
-                with ce6:
-                    e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']), key="ev_est")
-                    st.warning(f"Saldo: ${(e_total - (v_abono_prev + nuevo_pago)):,.0f}")
+                    st.info(f"Abonado hasta hoy: ${v_abono_prev:,.0f}")
+                    nuevo_pago = st.number_input("Nuevo abono ahora ($)", min_value=0.0, key="ev_nue")
+                    medio_pago = st.selectbox("Medio de este abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="ev_med")
+                
+                e_desc = st.text_area("Descripción Trabajo", value=str(d['descripcion']), key="ev_desc")
+                e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']), key="ev_est")
+                e_fac = st.radio("Factura", ["SÍ", "NO"], index=0 if str(d['factura']) == "SÍ" else 1, horizontal=True, key="ev_fac")
 
                 if st.button("💾 GUARDAR TODOS LOS CAMBIOS", use_container_width=True, key="btn_save_edit"):
                     abono_f = v_abono_prev + nuevo_pago
@@ -229,65 +225,35 @@ elif opcion == "Ventas":
                     payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "cliente": e_cli, "nit": e_nit, "celular": e_cel, "factura": e_fac, "descripcion": e_desc, "total": e_total, "abono": abono_f, "saldo": e_total-abono_f, "estado": e_est, "historial_pagos": hist_f}
                     if enviar_google(payload): st.success("¡Cambios guardados!"); st.rerun()
 
-                # --- ZONA DE PELIGRO (SOLO ADMIN) ---
                 if st.session_state['rol'] == 'admin':
-                    st.markdown("<br><br>", unsafe_allow_html=True)
-                    with st.expander("🚨 ZONA DE PELIGRO - ELIMINAR"):
-                        st.warning("Esta acción eliminará la orden del Excel definitivamente.")
-                        confirmar = st.checkbox("Confirmar eliminación", key="conf_del_v")
-                        if confirmar:
-                            if st.button("🗑️ ELIMINAR ORDEN", use_container_width=True, type="primary"):
-                                if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": str(ord_s)}):
-                                    st.success("Orden eliminada"); st.rerun()
+                    with st.expander("🚨 ZONA DE PELIGRO"):
+                        if st.button("🗑️ ELIMINAR ORDEN DEFINITIVAMENTE", use_container_width=True, type="primary"):
+                            if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": str(ord_s)}):
+                                st.success("Orden eliminada"); st.rerun()
 
-    if st.session_state['rol'] == 'admin':
+    if st.session_state['rol'] == 'admin' and 'tab_rep' in locals():
         with tab_rep:
             if not df_v.empty:
-                st.subheader("📊 Reportes Avanzados")
+                st.subheader("📊 Resumen de Ventas")
                 df_v['fecha_dt'] = pd.to_datetime(df_v['fecha'], errors='coerce')
-                f1, f2, f3 = st.columns(3)
-                with f1:
-                    sel_emp = st.selectbox("Empleado:", ["Todos"] + df_v['empleado'].unique().tolist(), key="rep_emp")
-                with f2:
-                    modo_t = st.radio("Temporalidad:", ["Todo", "Día / Semana", "Mes / Año"], horizontal=True, key="rep_modo")
-                with f3:
-                    df_rep = df_v.copy()
-                    if modo_t == "Día / Semana":
-                        rango = st.date_input("Rango:", value=[datetime.now(), datetime.now()], key="rep_rango")
-                        if len(rango) == 2:
-                            df_rep = df_rep[(df_rep['fecha_dt'].dt.date >= rango[0]) & (df_rep['fecha_dt'].dt.date <= rango[1])]
-                    elif modo_t == "Mes / Año":
-                        m_sel = st.selectbox("Mes:", range(1, 13), index=datetime.now().month-1, format_func=lambda x: ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][x-1], key="rep_mes")
-                        a_sel = st.selectbox("Año:", sorted(df_v['fecha_dt'].dt.year.unique(), reverse=True), key="rep_ano")
-                        df_rep = df_rep[(df_rep['fecha_dt'].dt.month == m_sel) & (df_rep['fecha_dt'].dt.year == a_sel)]
+                vt = pd.to_numeric(df_v['total'], errors='coerce').sum()
+                at = pd.to_numeric(df_v['abono'], errors='coerce').sum()
+                c_m1, c_m2 = st.columns(2)
+                c_m1.metric("💰 Ventas Totales", f"$ {vt:,.0f}")
+                c_m2.metric("📥 Total Cobrado", f"$ {at:,.0f}")
+                st.dataframe(df_v.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
 
-                if sel_emp != "Todos": df_rep = df_rep[df_rep['empleado'] == sel_emp]
-                st.divider()
-                vt = pd.to_numeric(df_rep['total'], errors='coerce').sum()
-                at = pd.to_numeric(df_rep['abono'], errors='coerce').sum()
-                c_m1, c_m2, c_m3 = st.columns(3)
-                c_m1.metric("💰 Ventas", f"$ {vt:,.0f}")
-                c_m2.metric("📥 Cobrado", f"$ {at:,.0f}")
-                c_m3.metric("⏳ Pendiente", f"$ {vt-at:,.0f}")
-                st.dataframe(df_rep.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
-
-    # --- TABLA ÚNICA INFERIOR ---
+    # --- HISTORIAL (TABLA) ---
     st.divider()
-    st.subheader(f"📋 Historial de Órdenes")
-    busq = st.text_input("🔍 Buscar en historial...", key="busq_final_v")
+    st.subheader("📋 Historial de Órdenes")
     df_m = df_v.copy()
-    
-    # Filtro para que Carolina solo vea lo suyo (insensible a mayúsculas/minúsculas)
     if st.session_state['rol'] != 'admin':
         user_actual = str(st.session_state['usuario']).strip().lower()
         df_m = df_m[df_m['empleado'].str.lower() == user_actual]
     
-    df_m = df_m.iloc[::-1] # Lo más reciente primero
+    st.dataframe(df_m.iloc[::-1], use_container_width=True, hide_index=True)
 
-    if busq:
-        df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
-    
-    if not df_m.empty:
-        st.dataframe(df_m, use_container_width=True, hide_index=True)
-    else:
-        st.info("No hay registros para mostrar.")
+# --- GESTIÓN EMPLEADOS ---
+elif opcion == "Gestión de Empleados":
+    # (Ya está manejado arriba en el bloque de 'admin', pero por seguridad lo dejamos)
+    pass
