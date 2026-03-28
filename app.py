@@ -6,7 +6,17 @@ import io
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
-st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;} 
+    footer {visibility: hidden;} 
+    .stDeployButton {display:none;}
+    /* Esto permite que el botón del sidebar siga siendo clickable */
+    section[data-testid="stSidebar"] {
+        top: 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ⚠️ REEMPLAZA CON TU URL SI ES DIFERENTE
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
