@@ -225,10 +225,33 @@ elif opcion == "Ventas":
                 c_m3.metric("⏳ Pendiente", f"$ {vt-at:,.0f}")
                 st.dataframe(df_rep.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
 
-    # --- TABLA ÚNICA INFERIOR ---
+  # --- TABLA ÚNICA INFERIOR (REPARACIÓN DE VISUALIZACIÓN) ---
     st.divider()
-    busq = st.text_input("🔍 Buscar en historial...")
-    df_m = df_v.copy().iloc[::-1]
-    if st.session_state['rol'] != 'admin': df_m = df_m[df_m['empleado'] == st.session_state['usuario']]
-    if busq: df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
-    st.dataframe(df_m, use_container_width=True, hide_index=True)
+    st.subheader(f"📋 Mis Órdenes Registradas: {st.session_state['usuario']}")
+    
+    busq = st.text_input("🔍 Buscar en mi historial...", key="busq_final")
+    
+    # 1. Forzamos una copia fresca de los datos
+    df_m = df_v.copy()
+    
+    # 2. Limpieza de seguridad: quitamos espacios invisibles en los nombres
+    df_m['empleado'] = df_m['empleado'].astype(str).str.strip()
+    user_actual = str(st.session_state['usuario']).strip()
+
+    # 3. Aplicamos el filtro de empleado (solo si no es admin)
+    if st.session_state['rol'] != 'admin':
+        # Filtramos comparando en minúsculas para que no falle por una letra
+        df_m = df_m[df_m['empleado'].str.lower() == user_actual.lower()]
+    
+    # 4. Invertimos para ver lo más reciente arriba
+    df_m = df_m.iloc[::-1]
+
+    # 5. Filtro de búsqueda manual
+    if busq:
+        df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
+    
+    # 6. MOSTRAR TABLA
+    if not df_m.empty:
+        st.dataframe(df_m, use_container_width=True, hide_index=True)
+    else:
+        st.info("No se encontraron más órdenes bajo tu nombre. Si las ves en el Excel, verifica que el nombre del empleado en la hoja de Google coincida exactamente con tu usuario.")
