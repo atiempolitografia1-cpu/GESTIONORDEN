@@ -89,11 +89,22 @@ if not st.session_state['autenticado']:
     st.stop()
 
 # --- MENÚ ---
-menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
-opcion = st.sidebar.radio("Ir a:", menu)
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state['autenticado'] = False
-    st.rerun()
+# --- MENÚ Y PERFIL EN BARRA LATERAL ---
+with st.sidebar:
+    # Mostramos el nombre del usuario con un diseño llamativo
+    st.markdown(f"### 👤 Usuario: {st.session_state['usuario'].capitalize()}")
+    st.markdown(f"**Rol:** `{st.session_state['rol'].upper()}`")
+    st.divider() # Una línea divisoria para separar el perfil del menú
+    
+    # El radio button que ya tenías
+    menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
+    opcion = st.sidebar.radio("Ir a:", menu)
+    
+    st.markdown("<br><br>", unsafe_allow_html=True) # Espacio extra
+    
+    if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state['autenticado'] = False
+        st.rerun()
 
 # --- SECCIÓN: EMPLEADOS ---
 if opcion == "Gestión de Empleados":
