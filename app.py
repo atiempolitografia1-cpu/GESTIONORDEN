@@ -185,14 +185,81 @@ elif opcion == "Ventas":
                                 if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": str(ord_s)}):
                                     st.warning("Orden eliminada"); st.rerun()
 
+   
+       # --- 3. PESTAÑA REPORTES (SOLO ADMIN) ---
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # REPORTES
+        with tab_rep:
             if not df_v.empty:
-                v_t = pd.to_numeric(df_v['total'], errors='coerce').sum()
-                a_t = pd.to_numeric(df_v['abono'], errors='coerce').sum()
-                c1, c2 = st.columns(2); c1.metric("Ventas Totales", f"$ {v_t:,.0f}"); c2.metric("Total Cobrado", f"$ {a_t:,.0f}")
-                html = df_v.to_html(index=False)
-                st.download_button("🟢 Descargar Excel", f'<html><meta charset="utf-8"><body>{html}</body></html>', "Reporte.xls", "application/vnd.ms-excel")
+                st.subheader("📊 Filtros de Reporte")
+                
+                # Convertimos la columna fecha a formato datetime para poder filtrar
+                df_v['fecha_dt'] = pd.to_datetime(df_v['fecha'], errors='coerce')
+                
+                col_f1, col_f2, col_f3 = st.columns(3)
+                
+                with col_f1:
+                    # Filtro de Empleado
+                    lista_emp = ["Todos"] + df_v['empleado'].unique().tolist()
+                    sel_emp = st.selectbox("Seleccionar Empleado:", lista_emp)
+                
+                with col_f2:
+                    # Filtro de Periodo
+                    tipo_filtro = st.radio("Filtrar por:", ["Todo", "Día / Rango", "Mes / Año"], horizontal=True)
+                
+                with col_f3:
+                    # Lógica de fechas
+                    df_filtrado = df_v.copy()
+                    
+                    if tipo_filtro == "Día / Rango":
+                        rango = st.date_input("Seleccione Día o Rango (Semana):", value=[datetime.now(), datetime.now()])
+                        if len(rango) == 2:
+                            inicio, fin = rango
+                            df_filtrado = df_filtrado[(df_filtrado['fecha_dt'].dt.date >= inicio) & (df_filtrado['fecha_dt'].dt.date <= fin)]
+                    
+                    elif tipo_filtro == "Mes / Año":
+                        meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                        c_m1, c_m2 = st.columns(2)
+                        with c_m1:
+                            sel_mes = st.selectbox("Mes:", range(1, 13), format_func=lambda x: meses[x-1], index=datetime.now().month - 1)
+                        with c_m2:
+                            sel_ano = st.selectbox("Año:", sorted(df_v['fecha_dt'].dt.year.unique(), reverse=True))
+                        
+                        df_filtrado = df_filtrado[(df_filtrado['fecha_dt'].dt.month == sel_mes) & (df_filtrado['fecha_dt'].dt.year == sel_ano)]
+
+                # Aplicar filtro de empleado al final
+                if sel_emp != "Todos":
+                    df_filtrado = df_filtrado[df_filtrado['empleado'] == sel_emp]
+
+                st.divider()
+
+                # --- MÉTRICAS ---
+                v_t = pd.to_numeric(df_filtrado['total'], errors='coerce').sum()
+                a_t = pd.to_numeric(df_filtrado['abono'], errors='coerce').sum()
+                s_t = v_t - a_t
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("💰 Ventas Totales", f"$ {v_t:,.0f}")
+                m2.metric("📥 Total Cobrado (Abonos)", f"$ {a_t:,.0f}")
+                m3.metric("⏳ Saldo Pendiente", f"$ {s_t:,.0f}")
+
+                # --- TABLA DE RESULTADOS ---
+                st.write(f"### Detalle de registros ({len(df_filtrado)})")
+                # Quitamos la columna técnica de fecha_dt para mostrar la tabla limpia
+                df_mostrar = df_filtrado.drop(columns=['fecha_dt'])
+                st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+
+                # --- BOTÓN DE DESCARGA ---
+                html = df_mostrar.to_html(index=False)
+                excel_c = f'<html><head><meta charset="utf-8"></head><body>{html}</body></html>'
+                st.download_button(
+                    label="🟢 Descargar este Reporte (Excel)",
+                    data=excel_c,
+                    file_name=f"Reporte_{sel_emp}_{datetime.now().strftime('%Y%m%d')}.xls",
+                    mime="application/vnd.ms-excel",
+                    use_container_width=True
+                )
+            else:
+                st.info("No hay datos de ventas para generar reportes.")
 
     # --- TABLA ÚNICA ---
     st.divider()
