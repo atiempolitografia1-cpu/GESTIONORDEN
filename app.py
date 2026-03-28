@@ -12,7 +12,7 @@ st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
 URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwefjYpHKmQNY6BY9-DXWAxk2GNN6VVeiVDxzr0xV-3Z7Ab9QLwkLulFK5d60rqQCVSSA/exec"
 
-# --- 1. FUNCIÓN DE ENVÍO (LA QUE FALTABA) ---
+# --- 1. FUNCIÓN DE ENVÍO ---
 def enviar_google(payload):
     try:
         res = requests.post(URL_SCRIPT, json=payload, timeout=15)
@@ -25,14 +25,13 @@ def enviar_google(payload):
         st.error(f"Error de conexión: {e}")
         return False
 
-# --- 2. FUNCIÓN DE LECTURA (CORRIGE EL 'nan') ---
+# --- 2. FUNCIÓN DE LECTURA ---
 def leer_datos(pestana):
     try:
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text))
         
-        # EL TRUCO PARA EL CELULAR: Convertir todo a texto y quitar el 'nan'
         df = df.astype(str).replace('nan', '') 
         
         if df.empty:
@@ -76,45 +75,59 @@ if st.sidebar.button("Cerrar Sesión"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- SECCIÓN: EMPLEADOS ---
+# --- SECCIÓN: EMPLEADOS (CORREGIDA CON KEYS ÚNICOS) ---
 if opcion == "Gestión de Empleados":
     st.title("👥 Gestión de Personal")
-    t1, t2 = st.tabs(["➕ Nuevo", "⚙️ Editar/Eliminar"])
+    t1, t2 = st.tabs(["➕ Nuevo Empleado", "⚙️ Modificar / Eliminar"])
+    
     with t1:
-        n_nom = st.text_input("Nombre")
-        n_cla = st.text_input("Clave")
-        n_rol = st.selectbox("Rol", ["empleado", "admin"])
-        if st.button("Registrar"):
-            if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
-                st.success("Registrado"); st.rerun()
+        st.subheader("Registrar nuevo acceso")
+        n_nom = st.text_input("Nombre Completo", key="n_nombre_reg")
+        n_cla = st.text_input("Contraseña", key="n_clave_reg")
+        n_rol = st.selectbox("Rol", ["empleado", "admin"], key="n_rol_reg")
+        
+        if st.button("Registrar en el Sistema", use_container_width=True):
+            if n_nom and n_cla:
+                payload = {"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}
+                if enviar_google(payload): 
+                    st.success("Registrado correctamente"); st.rerun()
+            else: st.warning("Completa nombre y clave.")
+            
     with t2:
+        st.subheader("Control de Usuarios Activos")
         df_u = leer_datos("usuarios")
         if not df_u.empty:
-            u_sel = st.selectbox("Seleccione Usuario", df_u['nombre'].tolist())
+            u_sel = st.selectbox("Seleccione Usuario", df_u['nombre'].tolist(), key="u_selector_edit")
             u_data = df_u[df_u['nombre'] == u_sel].iloc[0]
-            e_cla = st.text_input("Clave", value=u_data['clave'])
-            e_rol = st.selectbox("Rol", ["empleado", "admin"], index=0 if u_data['rol'] == "empleado" else 1)
+            
+            e_cla = st.text_input("Cambiar Contraseña", value=str(u_data['clave']), key="e_clave_edit")
+            e_rol = st.selectbox("Cambiar Rol", ["empleado", "admin"], 
+                                 index=0 if str(u_data['rol']).lower() == "empleado" else 1,
+                                 key="e_rol_edit")
+            
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("💾 Guardar"):
+                if st.button("💾 Guardar Cambios", use_container_width=True):
                     if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
                         st.success("Actualizado"); st.rerun()
             with c2:
-                if u_sel != "Administrador" and st.button("🗑️ Eliminar"):
-                    if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
-                        st.warning("Eliminado"); st.rerun()
+                if u_sel != "Administrador":
+                    if st.button("🗑️ ELIMINAR ACCESO", use_container_width=True):
+                        if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
+                            st.warning("Acceso eliminado"); st.rerun()
+                else:
+                    st.info("El Administrador principal no se puede eliminar.")
 
+# --- SECCIÓN: VENTAS ---
 elif opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v = leer_datos("ventas")
     
-    # Definición de pestañas según el rol para evitar el NameError
     if st.session_state['rol'] == 'admin':
         tab_reg, tab_edit, tab_rep = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"])
     else:
         tab_reg, tab_edit = st.tabs(["📝 Registrar", "✏️ Editar / Abonar"])
 
-    # --- 1. PESTAÑA REGISTRAR ---
     with tab_reg:
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
@@ -141,7 +154,6 @@ elif opcion == "Ventas":
                     st.session_state['limp_v'] += 1; st.success("¡Venta guardada!"); st.rerun()
             else: st.error("Faltan datos (N° Orden o Cliente)")
 
-    # --- 2. PESTAÑA EDITAR ---
     with tab_edit:
         if not df_v.empty:
             opciones_o = df_v['n_orden'].unique().tolist() if st.session_state['rol'] == 'admin' else df_v[df_v['empleado'] == st.session_state['usuario']]['n_orden'].unique().tolist()
@@ -152,63 +164,54 @@ elif opcion == "Ventas":
                 st.subheader(f"🛠️ Editando Orden N° {ord_s}")
                 ce1, ce2, ce3 = st.columns(3)
                 with ce1:
-                    e_cli = st.text_input("Nombre Cliente", value=str(d['cliente']))
-                    e_nit = st.text_input("NIT / CC", value=str(d['nit']))
+                    e_cli = st.text_input("Nombre Cliente", value=str(d['cliente']), key="edit_cli_v")
+                    e_nit = st.text_input("NIT / CC", value=str(d['nit']), key="edit_nit_v")
                 with ce2:
-                    e_cel = st.text_input("Celular", value=str(d['celular']))
-                    e_fac = st.radio("Factura", ["SÍ", "NO"], index=0 if str(d['factura']) == "SÍ" else 1, horizontal=True)
+                    e_cel = st.text_input("Celular", value=str(d['celular']), key="edit_cel_v")
+                    e_fac = st.radio("Factura", ["SÍ", "NO"], index=0 if str(d['factura']) == "SÍ" else 1, horizontal=True, key="edit_fac_v")
                 with ce3:
-                    e_desc = st.text_area("Descripción Trabajo", value=str(d['descripcion']))
+                    e_desc = st.text_area("Descripción Trabajo", value=str(d['descripcion']), key="edit_desc_v")
 
                 st.divider()
                 ce4, ce5, ce6 = st.columns(3)
                 with ce4:
-                    e_total = st.number_input("Valor Total ($)", value=float(pd.to_numeric(d['total'], errors='coerce') or 0.0))
+                    e_total = st.number_input("Valor Total ($)", value=float(pd.to_numeric(d['total'], errors='coerce') or 0.0), key="edit_tot_v")
                     v_abono_prev = float(pd.to_numeric(d['abono'], errors='coerce') or 0.0)
-                    st.info(f"Abonado: ${v_abono_prev:,.0f}")
+                    st.info(f"Abonado hasta ahora: ${v_abono_prev:,.0f}")
                 with ce5:
-                    nuevo_pago = st.number_input("Nuevo abono ($)", min_value=0.0)
-                    medio_pago = st.selectbox("Medio de pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+                    nuevo_pago = st.number_input("Nuevo abono hoy ($)", min_value=0.0, key="edit_nue_v")
+                    medio_pago = st.selectbox("Medio de pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="edit_med_v")
                 with ce6:
-                    e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
-                    st.warning(f"Saldo: ${(e_total - (v_abono_prev + nuevo_pago)):,.0f}")
+                    e_est = st.selectbox("Estado Actual", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']), key="edit_est_v")
+                    st.warning(f"Saldo restante: ${(e_total - (v_abono_prev + nuevo_pago)):,.0f}")
 
-                if st.button("💾 GUARDAR CAMBIOS", use_container_width=True):
+                if st.button("💾 GUARDAR TODOS LOS CAMBIOS", use_container_width=True):
                     abono_f = v_abono_prev + nuevo_pago
                     hist_f = str(d['historial_pagos']) if str(d['historial_pagos']) != "nan" else ""
                     if nuevo_pago > 0:
                         hist_f = (hist_f + " || " if hist_f else "") + f"${nuevo_pago:,.0f} ({medio_pago}) el {datetime.now().strftime('%Y-%m-%d')}"
                     payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "cliente": e_cli, "nit": e_nit, "celular": e_cel, "factura": e_fac, "descripcion": e_desc, "total": e_total, "abono": abono_f, "saldo": e_total-abono_f, "estado": e_est, "historial_pagos": hist_f}
-                    if enviar_google(payload): st.success("¡Listo!"); st.rerun()
+                    if enviar_google(payload): st.success("¡Cambios guardados!"); st.rerun()
 
-                if st.session_state['rol'] == 'admin':
-                    with st.expander("🗑️ ELIMINAR ORDEN"):
-                        if st.checkbox("Confirmar eliminación definitiva"):
-                            if st.button("ELIMINAR AHORA"):
-                                if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": str(ord_s)}):
-                                    st.warning("Borrado"); st.rerun()
-
-    # --- 3. PESTAÑA REPORTES (SOLO ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tab_rep:
             if not df_v.empty:
-                st.subheader("🔍 Filtros de Inteligencia de Negocio")
+                st.subheader("📊 Filtros de Reporte")
                 df_v['fecha_dt'] = pd.to_datetime(df_v['fecha'], errors='coerce')
-                
                 f1, f2, f3 = st.columns(3)
                 with f1:
-                    sel_emp = st.selectbox("Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
+                    sel_emp = st.selectbox("Empleado:", ["Todos"] + df_v['empleado'].unique().tolist(), key="rep_emp")
                 with f2:
-                    modo_t = st.radio("Temporalidad:", ["Todo", "Día / Semana", "Mes / Año"], horizontal=True)
+                    modo_t = st.radio("Filtrar por:", ["Todo", "Día / Semana", "Mes / Año"], horizontal=True, key="rep_modo")
                 with f3:
                     df_rep = df_v.copy()
                     if modo_t == "Día / Semana":
-                        rango = st.date_input("Rango:", value=[datetime.now(), datetime.now()])
+                        rango = st.date_input("Rango:", value=[datetime.now(), datetime.now()], key="rep_rango")
                         if len(rango) == 2:
                             df_rep = df_rep[(df_rep['fecha_dt'].dt.date >= rango[0]) & (df_rep['fecha_dt'].dt.date <= rango[1])]
                     elif modo_t == "Mes / Año":
-                        m_sel = st.selectbox("Mes:", range(1, 13), index=datetime.now().month-1, format_func=lambda x: ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][x-1])
-                        a_sel = st.selectbox("Año:", sorted(df_v['fecha_dt'].dt.year.unique(), reverse=True))
+                        m_sel = st.selectbox("Mes:", range(1, 13), index=datetime.now().month-1, format_func=lambda x: ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][x-1], key="rep_mes")
+                        a_sel = st.selectbox("Año:", sorted(df_v['fecha_dt'].dt.year.unique(), reverse=True), key="rep_ano")
                         df_rep = df_rep[(df_rep['fecha_dt'].dt.month == m_sel) & (df_rep['fecha_dt'].dt.year == a_sel)]
 
                 if sel_emp != "Todos": df_rep = df_rep[df_rep['empleado'] == sel_emp]
@@ -220,15 +223,11 @@ elif opcion == "Ventas":
                 c_m1.metric("💰 Ventas", f"$ {vt:,.0f}")
                 c_m2.metric("📥 Cobrado", f"$ {at:,.0f}")
                 c_m3.metric("⏳ Pendiente", f"$ {vt-at:,.0f}")
-
                 st.dataframe(df_rep.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
-                html = df_rep.drop(columns=['fecha_dt']).to_html(index=False)
-                st.download_button("🟢 Descargar Excel Filtrado", f'<html><meta charset="utf-8"><body>{html}</body></html>', f"Reporte_{sel_emp}.xls", "application/vnd.ms-excel")
-            else: st.info("Sin datos.")
 
     # --- TABLA ÚNICA INFERIOR ---
     st.divider()
-    busq = st.text_input("🔍 Buscar en historial general...")
+    busq = st.text_input("🔍 Buscar en historial...")
     df_m = df_v.copy().iloc[::-1]
     if st.session_state['rol'] != 'admin': df_m = df_m[df_m['empleado'] == st.session_state['usuario']]
     if busq: df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
