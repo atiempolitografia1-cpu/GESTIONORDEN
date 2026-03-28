@@ -28,26 +28,36 @@ def enviar_google(payload):
 # --- 2. FUNCIÓN DE LECTURA ---
 def leer_datos(pestana):
     try:
+        # El microsegundo al final evita que Google te mande datos viejos
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
-        df = pd.read_csv(io.StringIO(res.text))
         
-        df = df.astype(str).replace('nan', '') 
+        # Leemos el CSV pero forzamos a que TODO sea tratado como string (texto) desde el inicio
+        df = pd.read_csv(io.StringIO(res.text), dtype=str)
         
+        # 1. Quitamos los 'nan' (celdas vacías que Google Sheets manda como error)
+        df = df.fillna('')
+        
+        # 2. Limpieza profunda: quitamos espacios accidentales y aseguramos texto puro
+        for col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
+            
         if df.empty:
             return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
             
+        # Asignamos nombres de columnas fijos para que no dependa de lo que diga el Excel
         if pestana == "usuarios":
-            cols = ['nombre', 'clave', 'rol']
-            df.columns = cols + list(df.columns[len(cols):])
+            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
         elif pestana == "ventas":
             cols_v = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
-            df.columns = cols_v + list(df.columns[len(cols_v):])
+            # Solo tomamos las columnas que necesitamos por si el Excel tiene columnas vacías extra
+            df = df.iloc[:, :len(cols_v)]
+            df.columns = cols_v
             
-        return df.apply(lambda x: x.str.strip())
+        return df
     except Exception as e:
+        st.error(f"Error leyendo {pestana}: {e}")
         return pd.DataFrame()
-
 # --- LOGIN Y SESIÓN ---
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 
