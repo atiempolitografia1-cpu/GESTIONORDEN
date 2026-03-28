@@ -9,7 +9,7 @@ st.set_page_config(page_title="Gestión Negocio Pro", layout="wide")
 st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {display:none;}</style>""", unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxIE-t9HHGs7brDFRlaRMAG7MbsgT-5zhyy2dAgQCyok8xTEX0Nf2MWi8utNZuLRCTIMg/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzF3sYgCJQ8CNZ-flKFetqxJOGCIdel-nasr6X3cmrN7rvuFGaQtS4SFkeqQAny6OhaSA/exec"
 
 # INICIALIZACIÓN DE SESIÓN SEGURA
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
@@ -139,13 +139,11 @@ elif opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v = leer_datos("ventas")
     
-    # Definimos las pestañas según el ROL
     if st.session_state['rol'] == 'admin':
-        tab_reg, tab_edit, tab_rep = st.tabs(["📝 Registrar", "✏️ Editar / Eliminar", "📊 Reportes"])
+        tab_reg, tab_edit, tab_rep = st.tabs(["📝 Registrar", "✏️ Abonos / Estados / Eliminar", "📊 Reportes"])
     else:
-        tab_reg, tab_edit = st.tabs(["📝 Registrar", "✏️ Editar"])
+        tab_reg, tab_edit = st.tabs(["📝 Registrar", "✏️ Abonos / Estados"])
 
-    # --- 1. PESTAÑA REGISTRAR ---
     with tab_reg:
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
@@ -160,18 +158,97 @@ elif opcion == "Ventas":
             v_cel = st.text_input("Celular", key="cel"+vs)
         with c3:
             v_tot = st.number_input("Total ($)", key="t"+vs, step=1.0)
-            v_abo = st.number_input("Abono ($)", key="a"+vs, step=1.0)
+            v_abo = st.number_input("Abono Inicial ($)", key="a"+vs, step=1.0)
             v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+vs)
-            v_pag = st.selectbox("Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="p"+vs)
-
+            v_pag = st.selectbox("Medio Pago Inicial", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="p"+vs)
+        
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
-                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": "", "factura": v_fac}
+                historial_ini = f"{v_abo:,.0f} ({v_pag})"
+                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": "", "factura": v_fac, "historial_pagos": historial_ini}
                 if enviar_google(payload): 
                     st.session_state['limp_v'] += 1
                     st.success("¡Venta guardada!"); st.rerun()
-            else: st.error("Faltan datos (N° Orden o Cliente)")
 
+    with tab_edit:
+        if not df_v.empty:
+            if st.session_state['rol'] == 'admin': opciones_o = df_v['n_orden'].unique().tolist()
+            else: opciones_o = df_v[df_v['empleado'] == st.session_state['usuario']]['n_orden'].unique().tolist()
+            
+            ord_s = st.selectbox("Seleccione Orden para Abonar:", ["Seleccionar..."] + opciones_o)
+            if ord_s != "Seleccionar...":
+                d = df_v[df_v['n_orden'] == str(ord_s)].iloc[0]
+                
+                # Mostramos lo que ya han pagado
+                st.write(f"### Cliente: {d['cliente']}")
+                st.warning(f"Total: ${float(d['total']):,.0f} | Ya abonado: ${float(d['abono']):,.0f} | **Saldo Restante: ${float(d['saldo']):,.0f}**")
+                
+                if 'historial_pagos' in d and str(d['historial_pagos']) != "nan":
+                    st.info(f"📜 Detalle de abonos previos: {d['historial_pagos']}")
+
+                st.divider()
+                col_a1, col_a2 = st.columns(2)
+                with col_a1:
+                    nuevo_monto_abono = st.number_input("¿Cuánto va a abonar AHORA? ($)", min_value=0.0, step=100.0)
+                with col_a2:
+                    medio_nuevo = st.selectbox("¿Por qué medio paga este nuevo abono?", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+                
+                e_est = st.selectbox("Actualizar Estado de la Orden", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
+                
+                if st.button("💾 REGISTRAR NUEVO ABONO", use_container_width=True):
+                    if nuevo_monto_abono >= 0:
+                        # Calculamos acumulados
+                        total_abonado_nuevo = float(d['abono']) + nuevo_monto_abono
+                        nuevo_saldo = float(d['total']) - total_abonado_nuevo
+                        
+                        # Creamos la nueva nota de historial
+                        nota_actual = f"{nuevo_monto_abono:,.0f} ({medio_nuevo})"
+                        historial_completo = str(d['historial_pagos']) + " + " + nota_actual if str(d['historial_pagos']) != "nan" else nota_actual
+                        
+                        payload = {
+                            "accion": "actualizar", 
+                            "tipo_registro": "ventas", 
+                            "id_busqueda": ord_s, 
+                            "abono": total_abonado_nuevo, 
+                            "saldo": nuevo_saldo, 
+                            "estado": e_est,
+                            "historial_pagos": historial_completo
+                        }
+                        if enviar_google(payload): 
+                            st.success(f"¡Abono de ${nuevo_monto_abono:,.0f} registrado!"); st.rerun()
+
+                if st.session_state['rol'] == 'admin':
+                    st.divider()
+                    with st.expander("🗑️ ZONA DE PELIGRO"):
+                        conf = st.checkbox("Confirmar eliminación permanente de esta orden")
+                        if st.button("ELIMINAR AHORA", disabled=not conf, use_container_width=True):
+                            if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": str(ord_s)}):
+                                st.warning("Eliminado"); st.rerun()
+
+    # --- PESTAÑA REPORTES ---
+    if st.session_state['rol'] == 'admin':
+        with tab_rep:
+            if not df_v.empty:
+                emp_l = ["Todos"] + df_v['empleado'].unique().tolist()
+                sel_e = st.selectbox("Balance de:", emp_l)
+                df_f = df_v.copy()
+                if sel_e != "Todos": df_f = df_f[df_f['empleado'] == sel_e]
+                vt = pd.to_numeric(df_f['total'], errors='coerce').sum()
+                at = pd.to_numeric(df_f['abono'], errors='coerce').sum()
+                c1, c2, c3 = st.columns(3); c1.metric("Ventas", f"$ {vt:,.0f}"); c2.metric("Abonos", f"$ {at:,.0f}"); c3.metric("Saldo", f"$ {vt-at:,.0f}")
+                
+                # El excel ahora incluirá la columna de historial de pagos
+                html = df_f.to_html(index=False)
+                excel_c = f'<html><head><meta charset="utf-8"></head><body>{html}</body></html>'
+                st.download_button(f"🟢 Descargar Excel {sel_e}", excel_c, f"Reporte.xls", "application/vnd.ms-excel", use_container_width=True)
+
+    st.divider()
+    busq = st.text_input("🔍 Buscar Orden, Cliente o ver historial de pagos...")
+    df_m = df_v.copy().iloc[::-1]
+    if st.session_state['rol'] != 'admin': df_m = df_m[df_m['empleado'] == st.session_state['usuario']]
+    if busq: df_m = df_m[df_m.apply(lambda r: r.astype(str).str.contains(busq, case=False).any(), axis=1)]
+    st.dataframe(df_m, use_container_width=True, hide_index=True)
+    
     # --- 2. PESTAÑA EDITAR / ELIMINAR ---
     with tab_edit:
         if not df_v.empty:
