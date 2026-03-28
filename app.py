@@ -15,16 +15,8 @@ st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} 
     footer {visibility: hidden;} 
-    header {visibility: hidden;}
     .stDeployButton {display:none;}
-    
-    /* Ajuste de margen superior */
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
-    
-    /* Botón de sidebar visible */
+    /* Esto permite que el botón del sidebar siga siendo clickable */
     section[data-testid="stSidebar"] {
         top: 0;
     }
