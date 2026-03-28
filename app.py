@@ -19,32 +19,32 @@ if 'rol' not in st.session_state: st.session_state['rol'] = ""
 # --- FUNCIÓN DE LECTURA SIN CACHÉ ---
 def leer_datos(pestana):
     try:
+        # Agregamos un timestamp para evitar que el navegador guarde una versión vieja (Caché)
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text))
         
+        # --- EL TRUCO ESTÁ AQUÍ ---
+        # Convertimos todo a texto y reemplazamos los 'nan' por texto vacío
+        df = df.astype(str).replace('nan', '') 
+        
         if df.empty:
             return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
-
+            
         if pestana == "usuarios":
             cols = ['nombre', 'clave', 'rol']
             df.columns = cols + list(df.columns[len(cols):])
         elif pestana == "ventas":
-            cols_v = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura']
+            cols_v = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
             df.columns = cols_v + list(df.columns[len(cols_v):])
-
-        df = df.astype(str).apply(lambda x: x.str.strip())
-        df = df[df.iloc[:,0].str.lower() != df.columns[0].lower()]
+            
+        # Limpiamos espacios en blanco accidentales
+        df = df.apply(lambda x: x.str.strip())
         return df
-    except:
-        return pd.DataFrame(columns=['nombre', 'clave', 'rol']) if pestana == "usuarios" else pd.DataFrame()
-
-def enviar_google(payload):
-    try:
-        res = requests.post(URL_SCRIPT, json=payload, timeout=15)
-        return res.status_code == 200
-    except: return False
-
+    except Exception as e:
+        st.error(f"Error al leer datos: {e}")
+        return pd.DataFrame()
+        
 # --- LOGIN ---
 df_real = leer_datos("usuarios")
 admin_respaldo = pd.DataFrame([{'nombre': 'Administrador', 'clave': 'admin123', 'rol': 'admin'}])
