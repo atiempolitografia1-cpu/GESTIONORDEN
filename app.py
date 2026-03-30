@@ -130,23 +130,37 @@ if opcion == "Ventas":
                     if enviar_google(payload): st.success("¡Actualizado!"); st.rerun()
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # REPORTES
-            st.subheader("📊 Filtros")
+       with tabs[2]: # REPORTES (MEJORADOS)
+            st.subheader("📊 Análisis de Cartera y Ventas")
             df_v['fecha_dt'] = pd.to_datetime(df_v['fecha'], errors='coerce')
-            f1, f2 = st.columns(2)
-            with f1: sel_emp = st.selectbox("👤 Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
-            with f2: modo_t = st.radio("📅 Tiempo:", ["Todo", "Día / Semana", "Mes / Año"], horizontal=True)
+            
+            c_f1, c_f2 = st.columns(2)
+            with c_f1: sel_emp = st.selectbox("👤 Filtrar por Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
+            with c_f2: tipo_pago = st.radio("💰 Estado de Pago:", ["Todas", "Solo Pendientes (Deben)", "Solo Pagadas"], horizontal=True)
+            
             df_r = df_v.copy()
-            if modo_t == "Día / Semana":
-                ran = st.date_input("Rango:", value=[datetime.now(), datetime.now()])
-                if len(ran) == 2: df_r = df_r[(df_r['fecha_dt'].dt.date >= ran[0]) & (df_r['fecha_dt'].dt.date <= ran[1])]
-            elif modo_t == "Mes / Año":
-                m = st.selectbox("Mes:", range(1,13), index=datetime.now().month-1)
-                df_r = df_r[df_r['fecha_dt'].dt.month == m]
-            if sel_emp != "Todos": df_r = df_r[df_r['empleado'] == sel_emp]
-            st.metric("Total Cobrado en Filtro", f"$ {pd.to_numeric(df_r['abono'], errors='coerce').sum():,.0f}")
+            
+            # Filtro por pago
+            if tipo_pago == "Solo Pendientes (Deben)":
+                df_r = df_r[df_r['saldo'] > 0]
+            elif tipo_pago == "Solo Pagadas":
+                df_r = df_r[df_r['saldo'] <= 0]
+            
+            # Filtro por empleado
+            if sel_emp != "Todos":
+                df_r = df_r[df_r['empleado'] == sel_emp]
+            
+            st.divider()
+            m1, m2, m3 = st.columns(3)
+            total_v = df_r['total'].sum()
+            total_c = df_r['abono'].sum()
+            total_d = df_r['saldo'].sum()
+            
+            m1.metric("Valor Total Órdenes", f"$ {total_v:,.0f}")
+            m2.metric("Total Cobrado", f"$ {total_c:,.0f}", delta_color="normal")
+            m3.metric("Por Cobrar (Saldo)", f"$ {total_d:,.0f}", delta=f"-{total_d:,.0f}", delta_color="inverse")
+            
             st.dataframe(df_r.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
-
     # --- HISTORIAL Y BUSCADOR (ABAJO) ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
