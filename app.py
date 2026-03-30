@@ -214,6 +214,26 @@ if opcion == "Ventas":
                             st.success("✅ Orden actualizada en Excel")
                             st.rerun()
 
+
+ with tabs[2]: # REPORTES AVANZADOS (RESTAURADO)
+        st.subheader("📊 Filtros de Reporte")
+        c1, c2, c3 = st.columns(3)
+        f_ini = c1.date_input("Desde", datetime.now().replace(day=1))
+        f_fin = c2.date_input("Hasta", datetime.now())
+        f_emp = c3.selectbox("Empleado", ["TODOS"] + df_v_completo['empleado'].unique().tolist())
+        
+        df_r = df_v_completo.copy()
+        df_r['fecha_dt'] = pd.to_datetime(df_r['fecha']).dt.date
+        df_r = df_r[(df_r['fecha_dt'] >= f_ini) & (df_r['fecha_dt'] <= f_fin)]
+        if f_emp != "TODOS": df_r = df_r[df_r['empleado'] == f_emp]
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Ventas Totales", formato_pesos(df_r['total_n'].sum()))
+        m2.metric("Recaudado (Abonos)", formato_pesos(df_r['abono_n'].sum()))
+        m3.metric("Por Cobrar (Saldos)", formato_pesos(df_r['saldo_n'].sum()))
+        st.dataframe(df_r.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
+
+    
     # --- HISTORIAL ---
     st.divider()
     st.subheader("📋 Historial")
