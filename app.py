@@ -56,21 +56,30 @@ def leer_datos(pestana):
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
+        
         if pestana == "usuarios":
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
         elif pestana == "ventas":
             cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
             df = df.iloc[:, :len(cols)]
             df.columns = cols
-            # --- PROCESAMIENTO CRÍTICO DE DATOS ---
+            
+            # --- LIMPIEZA DE FECHAS A PRUEBA DE TODO ---
+            # Convertimos a fecha real, ignorando errores (NaN)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            # Creamos una columna que es SOLO el día (sin horas)
+            df['fecha_solo_dia'] = df['fecha_dt'].dt.date
+            
+            # --- PROCESAMIENTO DE NÚMEROS ---
             df['total_n'] = df['total'].apply(a_numero)
             df['abono_n'] = df['abono'].apply(a_numero)
             df['saldo_n'] = df['total_n'] - df['abono_n']
-            # Convertimos la fecha una sola vez para todo el sistema
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
-            df['fecha_solo_dia'] = df['fecha_dt'].dt.date
+            
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error de lectura: {e}")
+        return pd.DataFrame()
+        
 
 def enviar_google(payload):
     try:
@@ -253,23 +262,26 @@ if opcion == "Ventas":
         with tabs[2]: # 📊 REPORTES (ADMIN)
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
-            c_f1, c_f2, c_f3 = st.columns(3)
-            # Filtros que el Admin usa
-            f_ini = c_f1.date_input("📅 Desde", datetime.now().replace(day=1))
-            f_fin = c_f2.date_input("📅 Hasta", datetime.now())
-            lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
-            e_sel = c_f3.selectbox("👤 Empleado", lista_emp)
+            c1, c2, c3 = st.columns(3)
+            # Usamos date_input para obtener objetos de tipo 'date'
+            f_ini = c1.date_input("📅 Desde", datetime.now().replace(day=1))
+            f_fin = c2.date_input("📅 Hasta", datetime.now())
             
-            # --- LÓGICA DE FILTRADO ---
+            lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
+            e_sel = c3.selectbox("👤 Empleado", lista_emp)
+            
+            # --- FILTRADO MAESTRO ---
             df_r = df_v_comp.copy()
             
-            # Filtramos por fecha usando la columna que creamos arriba
+            # Nos aseguramos de quitar filas sin fecha antes de filtrar
+            df_r = df_r.dropna(subset=['fecha_solo_dia'])
+            
+            # FILTRO CRÍTICO: Comparación directa de fechas
             df_r = df_r[(df_r['fecha_solo_dia'] >= f_ini) & (df_r['fecha_solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
 
-            # Selector de estado de cuenta
             filtro_pago = st.radio("Ver órdenes:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
             if "Pendientes" in filtro_pago:
@@ -279,23 +291,22 @@ if opcion == "Ventas":
             else:
                 df_final = df_r.copy()
 
-            # --- MÉTRICAS ---
+            # --- MÉTRICAS Y TABLA ---
             st.divider()
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
-            m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-            m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+            col_m1, col_m2, col_m3 = st.columns(3)
+            col_m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
+            col_m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
+            col_m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
             
-            # --- TABLA SIN ERRORES ---
             if not df_final.empty:
                 columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
-                # Ordenamos por la fecha real para que lo más nuevo salga de primero
+                # Ordenamos por la fecha original para que se vea el registro completo
                 st.dataframe(
                     df_final[columnas_ver].sort_values('fecha', ascending=False),
                     use_container_width=True, hide_index=True
                 )
             else:
-                st.info("No hay órdenes registradas para estos filtros.")
+                st.info(f"No hay registros entre el {f_ini} y el {f_fin}.")
     
     # --- HISTORIAL FILTRADO ---
     st.divider()
