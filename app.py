@@ -28,6 +28,7 @@ def formato_pesos(valor):
 def a_numero(valor):
     try:
         if not valor or str(valor).strip() == "": return 0.0
+        # Limpieza robusta de símbolos y puntos
         s = str(valor).replace('$', '').replace(' ', '').replace('.', '').replace(',', '.')
         return float(s)
     except: return 0.0
@@ -102,11 +103,10 @@ if opcion == "Ventas":
         v_fac = c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
         
         c7, c8 = st.columns(2)
-        # Formato de moneda en el input
         v_tot = c7.number_input("Total ($ COP)", min_value=0.0, step=1000.0, format="%.0f", key="t"+vs)
         v_abo = c8.number_input("Abono Inicial ($ COP)", min_value=0.0, step=1000.0, format="%.0f", key="a"+vs)
         
-        st.caption(f"Visualización: {formato_pesos(v_tot)}") # Ayuda visual rápida
+        st.caption(f"Visualización: {formato_pesos(v_tot)}") 
         
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
         c9, c10 = st.columns(2)
@@ -118,67 +118,56 @@ if opcion == "Ventas":
                 payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
-    with tabs[1]: # EDITAR ORDEN COMPLETO
-    st.subheader("Modificar Orden Existente")
-    if not df_v.empty:
-        orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
-        
-        if orden_buscada != "Seleccionar...":
-            # Extraer datos actuales de la fila seleccionada
-            idx = df_v[df_v['n_orden'] == orden_buscada].index[0]
-            val = df_v.loc[idx]
+    with tabs[1]: # EDITAR ORDEN COMPLETO (CORREGIDO)
+        st.subheader("Modificar Orden Existente")
+        if not df_v.empty:
+            orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
             
-            with st.form("form_edit"):
-                st.info(f"Editando Orden: {orden_buscada} | Registrada por: {val['empleado']}")
-                col1, col2 = st.columns(2)
-                e_cli = col1.text_input("Cliente", value=val['cliente'])
-                e_nit = col2.text_input("NIT / CC", value=val['nit'])
+            if orden_buscada != "Seleccionar...":
+                idx = df_v[df_v['n_orden'] == orden_buscada].index[0]
+                val = df_v.loc[idx]
                 
-                col3, col4, col5 = st.columns(3)
-                e_cel = col3.text_input("Celular", value=val['celular'])
-                e_cor = col4.text_input("Correo", value=val['correo'])
-                e_fac = col5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura'] == "SÍ" else 1)
-                
-                e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
-                
-                col6, col7 = st.columns(2)
-                e_tot = col6.number_input("Total ($ COP)", value=float(val['total_n']), step=1000.0, format="%.0f")
-                st.markdown(f"**Saldo actual:** {formato_pesos(val['saldo_n'])}")
-                e_nuevo_abo = col7.number_input("Añadir nuevo abono ($ COP)", min_value=0.0, step=1000.0, format="%.0f", help="Este valor se sumará al abono anterior")
-                
-                col8, col9 = st.columns(2)
-                e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
-                e_pag = col9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
-
-                if st.form_submit_button("💾 ACTUALIZAR TODA LA ORDEN"):
-                    abono_final = val['abono_n'] + e_nuevo_abo
-                    historial_act = val['historial_pagos']
-                    if e_nuevo_abo > 0:
-                        historial_act += f" | +${e_nuevo_abo:,.0f} ({e_pag}) {datetime.now().date()}"
+                with st.form("form_edit"):
+                    st.info(f"Editando Orden: {orden_buscada} | Registrada por: {val['empleado']}")
+                    col1, col2 = st.columns(2)
+                    e_cli = col1.text_input("Cliente", value=val['cliente'])
+                    e_nit = col2.text_input("NIT / CC", value=val['nit'])
                     
-                    payload = {
-                        "accion": "actualizar",
-                        "tipo_registro": "ventas",
-                        "id_busqueda": orden_buscada,
-                        "cliente": e_cli,
-                        "nit": e_nit,
-                        "celular": e_cel,
-                        "correo": e_cor,
-                        "factura": e_fac,
-                        "descripcion": e_desc,
-                        "total": e_tot,
-                        "abono": abono_final,
-                        "saldo": e_tot - abono_final,
-                        "estado": e_est,
-                        "historial_pagos": historial_act
-                    }
-                    if enviar_google(payload):
-                        st.success("✅ Orden actualizada correctamente"); st.rerun()
-    else:
-        st.warning("No hay órdenes para editar.")
+                    col3, col4, col5 = st.columns(3)
+                    e_cel = col3.text_input("Celular", value=val['celular'])
+                    e_cor = col4.text_input("Correo", value=val['correo'])
+                    e_fac = col5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura'] == "SÍ" else 1)
+                    
+                    e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
+                    
+                    col6, col7 = st.columns(2)
+                    e_tot = col6.number_input("Total ($ COP)", value=float(val['total_n']), step=1000.0, format="%.0f")
+                    e_nuevo_abo = col7.number_input("Añadir nuevo abono ($ COP)", min_value=0.0, step=1000.0, format="%.0f")
+                    
+                    st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])}")
+                    
+                    col8, col9 = st.columns(2)
+                    e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
+                    e_pag = col9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+
+                    if st.form_submit_button("💾 ACTUALIZAR TODA LA ORDEN"):
+                        abono_final = val['abono_n'] + e_nuevo_abo
+                        hist_act = val['historial_pagos']
+                        if e_nuevo_abo > 0:
+                            hist_act += f" | +${e_nuevo_abo:,.0f} ({e_pag}) {datetime.now().date()}"
+                        
+                        payload = {
+                            "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": orden_buscada,
+                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
+                            "descripcion": e_desc, "total": e_tot, "abono": abono_final,
+                            "saldo": e_tot - abono_final, "estado": e_est, "historial_pagos": hist_act
+                        }
+                        if enviar_google(payload): st.success("✅ Orden actualizada"); st.rerun()
+        else:
+            st.warning("No hay órdenes para mostrar.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # REPORTES CON FORMATO
+        with tabs[2]: # REPORTES
             st.subheader("📊 Auditoría de Caja")
             f1, f2 = st.columns(2)
             sel_emp = f1.selectbox("👤 Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
@@ -187,10 +176,10 @@ if opcion == "Ventas":
             modo_t = st.radio("📅 Rango:", ["Todo", "Día / Semana", "Mes / Año"], horizontal=True)
             df_r = df_v.copy()
             
-            # (Lógica de fechas igual a la anterior...)
             if modo_t == "Día / Semana":
                 rango = st.date_input("Rango:", value=[datetime.now(), datetime.now()])
-                if len(rango) == 2: df_r = df_r[(df_r['fecha_dt'].dt.date >= rango[0]) & (df_r['fecha_dt'].dt.date <= rango[1])]
+                if len(rango) == 2:
+                    df_r = df_r[(df_r['fecha_dt'].dt.date >= rango[0]) & (df_r['fecha_dt'].dt.date <= rango[1])]
             elif modo_t == "Mes / Año":
                 m = st.selectbox("Mes:", range(1,13), index=datetime.now().month-1, format_func=lambda x: ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][x-1])
                 a = st.selectbox("Año:", sorted(df_v['fecha_dt'].dt.year.dropna().unique().astype(int), reverse=True) if not df_v.empty else [2026])
@@ -205,30 +194,22 @@ if opcion == "Ventas":
             m2.metric("Cobrado", formato_pesos(df_r['abono_n'].sum()))
             m3.metric("Por Cobrar", formato_pesos(df_r['saldo_n'].sum()))
             
-            # Formatear columnas de la tabla para ver pesos
-            df_mostrar = df_r.copy()
-            df_mostrar['total'] = df_mostrar['total_n'].apply(formato_pesos)
-            df_mostrar['abono'] = df_mostrar['abono_n'].apply(formato_pesos)
-            df_mostrar['saldo'] = df_mostrar['saldo_n'].apply(formato_pesos)
-            
-            st.dataframe(df_mostrar.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
+            df_m = df_r.copy()
+            df_m['total'] = df_m['total_n'].apply(formato_pesos)
+            df_m['abono'] = df_m['abono_n'].apply(formato_pesos)
+            df_m['saldo'] = df_m['saldo_n'].apply(formato_pesos)
+            st.dataframe(df_m.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
 
-    # --- HISTORIAL ---
     st.divider()
     st.subheader("📋 Historial")
-    # Formatear también la tabla de historial
     df_h = df_v.copy()
     df_h['total'] = df_h['total_n'].apply(formato_pesos)
     df_h['abono'] = df_h['abono_n'].apply(formato_pesos)
     df_h['saldo'] = df_h['saldo_n'].apply(formato_pesos)
     st.dataframe(df_h.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore').iloc[::-1], use_container_width=True, hide_index=True)
 
-
-
-# ... (Resto del código de empleados)
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
- 
     df_u = leer_datos("usuarios")
     t1, t2 = st.tabs(["➕ Nuevo Empleado", "✏️ Modificar / Eliminar"])
     
@@ -249,12 +230,10 @@ elif opcion == "Gestión de Empleados":
             with st.form("edit_emp"):
                 e_cla = st.text_input("Nueva Contraseña", value=datos_u['clave'])
                 e_rol = st.selectbox("Rol", ["empleado", "admin"], index=0 if datos_u['rol'] == 'empleado' else 1)
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.form_submit_button("ACTUALIZAR DATOS"):
-                        if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
-                            st.success("Datos actualizados"); st.rerun()
-                with col2:
-                    if u_sel != st.session_state['usuario'] and st.form_submit_button("⚠️ ELIMINAR ACCESO"):
-                        if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
-                            st.warning("Usuario eliminado"); st.rerun()
+                c1, c2 = st.columns(2)
+                if c1.form_submit_button("ACTUALIZAR DATOS"):
+                    if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
+                        st.success("Datos actualizados"); st.rerun()
+                if u_sel != st.session_state['usuario'] and c2.form_submit_button("⚠️ ELIMINAR ACCESO"):
+                    if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
+                        st.warning("Usuario eliminado"); st.rerun()
