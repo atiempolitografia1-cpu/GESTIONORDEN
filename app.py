@@ -12,19 +12,21 @@ st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stDeployButton {display:none;}
-    /* Estilo para la confirmación de dinero en verde */
-    .money-preview {
-        color: #00802b;
-        font-weight: bold;
-        background-color: #e6ffed;
-        padding: 2px 10px;
-        border-radius: 5px;
-        border: 1px solid #b7eb8f;
-        display: inline-block;
-        margin-top: -15px;
-        margin-bottom: 10px;
-    }
+    button[kind="headerNoPadding"] { visibility: visible !important; z-index: 9999991; background-color: rgba(255,255,255,0.1); border-radius: 5px; }
+    /* Estilo para métricas */
     [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00802b; }
+    /* Estilo para el visor de moneda en tiempo real */
+    .money-helper {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #00802b;
+        background-color: #e6f4ea;
+        padding: 5px 10px;
+        border-radius: 5px;
+        margin-top: -15px;
+        margin-bottom: 15px;
+        display: inline-block;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -44,8 +46,8 @@ def a_numero(valor):
     """Limpia el texto para convertirlo en número funcional"""
     try:
         if not valor: return 0.0
-        # Elimina cualquier cosa que no sea número o punto decimal
-        s = re.sub(r'[^\d.]', '', str(valor))
+        # Elimina símbolos de peso, puntos de miles y espacios
+        s = re.sub(r'[^\d,]', '', str(valor)).replace(',', '.')
         return float(s) if s else 0.0
     except: return 0.0
 
@@ -103,6 +105,7 @@ with st.sidebar:
 if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v = leer_datos("ventas")
+    
     tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"]) if st.session_state['rol'] == 'admin' else st.tabs(["📝 Registrar", "✏️ Editar / Abonar"])
 
     with tabs[0]: # REGISTRAR
@@ -112,14 +115,21 @@ if opcion == "Ventas":
         v_ord = c1.text_input("N° Orden", key="o"+vs)
         v_cli = c2.text_input("Cliente", key="cl"+vs)
         v_nit = c3.text_input("NIT / CC", key="ni"+vs)
+        c4, c5, c6 = st.columns(3)
+        v_cel = c4.text_input("Celular", key="ce"+vs)
+        v_cor = c5.text_input("Correo", key="co"+vs)
+        v_fac = c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
         
         c7, c8 = st.columns(2)
-        # Cambiado a number_input para evitar errores de librerías
-        v_tot = c7.number_input("Total Venta ($)", min_value=0, step=1000, key="tr"+vs)
-        c7.markdown(f'<div class="money-preview">Confirmado: {formato_pesos(v_tot)}</div>', unsafe_allow_html=True)
+        # Input de Total con visor de moneda
+        v_tot_raw = c7.text_input("Total ($ COP)", placeholder="Escribe el valor...", key="tr"+vs)
+        v_tot = a_numero(v_tot_raw)
+        c7.markdown(f'<div class="money-helper">{formato_pesos(v_tot)}</div>', unsafe_allow_html=True)
         
-        v_abo = c8.number_input("Abono Inicial ($)", min_value=0, step=1000, key="ar"+vs)
-        c8.markdown(f'<div class="money-preview">Confirmado: {formato_pesos(v_abo)}</div>', unsafe_allow_html=True)
+        # Input de Abono con visor de moneda
+        v_abo_raw = c8.text_input("Abono Inicial ($ COP)", placeholder="Escribe el abono...", key="ar"+vs)
+        v_abo = a_numero(v_abo_raw)
+        c8.markdown(f'<div class="money-helper">{formato_pesos(v_abo)}</div>', unsafe_allow_html=True)
         
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
         c9, c10 = st.columns(2)
@@ -128,52 +138,63 @@ if opcion == "Ventas":
         
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
-                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
+                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
-    with tabs[1]: # EDITAR ORDEN
+    with tabs[1]: # EDITAR ORDEN COMPLETO
         st.subheader("Modificar Orden Existente")
         if not df_v.empty:
             orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
+            
             if orden_buscada != "Seleccionar...":
                 idx = df_v[df_v['n_orden'] == orden_buscada].index[0]
                 val = df_v.loc[idx]
                 
                 with st.form("form_edit"):
-                    st.info(f"Editando Orden: {orden_buscada}")
-                    e_cli = st.text_input("Cliente", value=val['cliente'])
+                    st.info(f"Editando Orden: {orden_buscada} | Registrada por: {val['empleado']}")
+                    col1, col2 = st.columns(2)
+                    e_cli = col1.text_input("Cliente", value=val['cliente'])
+                    e_nit = col2.text_input("NIT / CC", value=val['nit'])
+                    
+                    col3, col4, col5 = st.columns(3)
+                    e_cel = col3.text_input("Celular", value=val['celular'])
+                    e_cor = col4.text_input("Correo", value=val['correo'])
+                    e_fac = col5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura'] == "SÍ" else 1)
+                    
                     e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                     
                     col6, col7 = st.columns(2)
-                    e_tot = col6.number_input("Total de la Venta ($)", value=int(val['total_n']), step=1000)
-                    col6.markdown(f'<div class="money-preview">{formato_pesos(e_tot)}</div>', unsafe_allow_html=True)
+                    # Dinero en Edición
+                    e_tot_raw = col6.text_input("Total ($ COP)", value=str(int(val['total_n'])))
+                    e_tot = a_numero(e_tot_raw)
+                    col6.markdown(f'<div class="money-helper">{formato_pesos(e_tot)}</div>', unsafe_allow_html=True)
                     
-                    e_nuevo_abo = col7.number_input("¿Cuánto abona HOY? ($)", value=0, step=1000)
-                    col7.markdown(f'<div class="money-preview">Abono hoy: {formato_pesos(e_nuevo_abo)}</div>', unsafe_allow_html=True)
+                    e_nuevo_abo_raw = col7.text_input("Añadir nuevo abono ($ COP)", value="0")
+                    e_nuevo_abo = a_numero(e_nuevo_abo_raw)
+                    col7.markdown(f'<div class="money-helper">Abonar: {formato_pesos(e_nuevo_abo)}</div>', unsafe_allow_html=True)
                     
-                    abono_total_acumulado = val['abono_n'] + e_nuevo_abo
-                    nuevo_saldo = e_tot - abono_total_acumulado
-                    
-                    st.warning(f"Saldo previo: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo Final: {formato_pesos(nuevo_saldo)}**")
+                    nuevo_saldo = e_tot - (val['abono_n'] + e_nuevo_abo)
+                    st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
                     
                     col8, col9 = st.columns(2)
                     e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
                     e_pag = col9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
 
                     if st.form_submit_button("💾 ACTUALIZAR TODA LA ORDEN"):
+                        abono_final = val['abono_n'] + e_nuevo_abo
                         hist_act = val['historial_pagos']
                         if e_nuevo_abo > 0:
                             hist_act += f" | +${e_nuevo_abo:,.0f} ({e_pag}) {datetime.now().date()}"
                         
                         payload = {
                             "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": orden_buscada,
-                            "cliente": e_cli, "descripcion": e_desc, "total": e_tot, 
-                            "abono": abono_total_acumulado, "saldo": nuevo_saldo, "estado": e_est, "historial_pagos": hist_act
+                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
+                            "descripcion": e_desc, "total": e_tot, "abono": abono_final,
+                            "saldo": e_tot - abono_final, "estado": e_est, "historial_pagos": hist_act
                         }
                         if enviar_google(payload): st.success("✅ Orden actualizada"); st.rerun()
         else:
-            st.warning("No hay órdenes.")
-            
+            st.warning("No hay órdenes para mostrar.")
 
     if st.session_state['rol'] == 'admin':
         with tabs[2]: # REPORTES
