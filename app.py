@@ -4,6 +4,8 @@ from datetime import datetime
 import requests
 import io
 import re
+# 1. NUEVA IMPORTACIÓN
+from streamlit_currency_input import currency_input
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
@@ -15,18 +17,6 @@ st.markdown("""
     button[kind="headerNoPadding"] { visibility: visible !important; z-index: 9999991; background-color: rgba(255,255,255,0.1); border-radius: 5px; }
     /* Estilo para métricas */
     [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00802b; }
-    /* Estilo para el visor de moneda en tiempo real */
-    .money-helper {
-        font-size: 1.1rem;
-        font-weight: bold;
-        color: #00802b;
-        background-color: #e6f4ea;
-        padding: 5px 10px;
-        border-radius: 5px;
-        margin-top: -15px;
-        margin-bottom: 15px;
-        display: inline-block;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -121,15 +111,10 @@ if opcion == "Ventas":
         v_fac = c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
         
         c7, c8 = st.columns(2)
-        # Input de Total con visor de moneda
-        v_tot_raw = c7.text_input("Total ($ COP)", placeholder="Escribe el valor...", key="tr"+vs)
-        v_tot = a_numero(v_tot_raw)
-        c7.markdown(f'<div class="money-helper">{formato_pesos(v_tot)}</div>', unsafe_allow_html=True)
         
-        # Input de Abono con visor de moneda
-        v_abo_raw = c8.text_input("Abono Inicial ($ COP)", placeholder="Escribe el abono...", key="ar"+vs)
-        v_abo = a_numero(v_abo_raw)
-        c8.markdown(f'<div class="money-helper">{formato_pesos(v_abo)}</div>', unsafe_allow_html=True)
+        # 2. CAMPOS CON FORMATO AUTOMÁTICO (REGISTRO)
+        v_tot = c7.currency_input("Total ($ COP)", symbol="$", key="tr"+vs, default=0.0)
+        v_abo = c8.currency_input("Abono Inicial ($ COP)", symbol="$", key="ar"+vs, default=0.0)
         
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
         c9, c10 = st.columns(2)
@@ -164,24 +149,20 @@ if opcion == "Ventas":
                     e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                     
                     col6, col7 = st.columns(2)
-                    # Dinero en Edición
-                    e_tot_raw = col6.text_input("Total ($ COP)", value=str(int(val['total_n'])))
-                    e_tot = a_numero(e_tot_raw)
-                    col6.markdown(f'<div class="money-helper">{formato_pesos(e_tot)}</div>', unsafe_allow_html=True)
                     
-                    e_nuevo_abo_raw = col7.text_input("Añadir nuevo abono ($ COP)", value="0")
-                    e_nuevo_abo = a_numero(e_nuevo_abo_raw)
-                    col7.markdown(f'<div class="money-helper">Abonar: {formato_pesos(e_nuevo_abo)}</div>', unsafe_allow_html=True)
+                    # 3. CAMPOS CON FORMATO AUTOMÁTICO (EDICIÓN)
+                    e_tot = col6.currency_input("Total ($ COP)", symbol="$", value=float(val['total_n']))
+                    e_nuevo_abo = col7.currency_input("Añadir nuevo abono ($ COP)", symbol="$", default=0.0)
                     
-                    nuevo_saldo = e_tot - (val['abono_n'] + e_nuevo_abo)
-                    st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
+                    abono_total_acumulado = val['abono_n'] + e_nuevo_abo
+                    nuevo_saldo = e_tot - abono_total_acumulado
+                    st.warning(f"Saldo previo: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo Final: {formato_pesos(nuevo_saldo)}**")
                     
                     col8, col9 = st.columns(2)
                     e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
                     e_pag = col9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
 
                     if st.form_submit_button("💾 ACTUALIZAR TODA LA ORDEN"):
-                        abono_final = val['abono_n'] + e_nuevo_abo
                         hist_act = val['historial_pagos']
                         if e_nuevo_abo > 0:
                             hist_act += f" | +${e_nuevo_abo:,.0f} ({e_pag}) {datetime.now().date()}"
@@ -189,8 +170,8 @@ if opcion == "Ventas":
                         payload = {
                             "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": orden_buscada,
                             "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
-                            "descripcion": e_desc, "total": e_tot, "abono": abono_final,
-                            "saldo": e_tot - abono_final, "estado": e_est, "historial_pagos": hist_act
+                            "descripcion": e_desc, "total": e_tot, "abono": abono_total_acumulado,
+                            "saldo": nuevo_saldo, "estado": e_est, "historial_pagos": hist_act
                         }
                         if enviar_google(payload): st.success("✅ Orden actualizada"); st.rerun()
         else:
