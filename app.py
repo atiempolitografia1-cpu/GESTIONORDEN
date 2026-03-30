@@ -57,28 +57,25 @@ def leer_datos(pestana):
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
         
-        if pestana == "usuarios":
-            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
-        elif pestana == "ventas":
+        if pestana == "ventas":
             cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
             df = df.iloc[:, :len(cols)]
             df.columns = cols
             
-            # --- LIMPIEZA DE FECHAS A PRUEBA DE TODO ---
-            # Convertimos a fecha real, ignorando errores (NaN)
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
-            # Creamos una columna que es SOLO el día (sin horas)
-            df['fecha_solo_dia'] = df['fecha_dt'].dt.date
-            
-            # --- PROCESAMIENTO DE NÚMEROS ---
+            # --- PROCESAMIENTO CRÍTICO ---
             df['total_n'] = df['total'].apply(a_numero)
             df['abono_n'] = df['abono'].apply(a_numero)
             df['saldo_n'] = df['total_n'] - df['abono_n']
             
+            # CREACIÓN DE COLUMNAS DE FECHA ESTABLES
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date # <--- ESTA ES LA QUE EVITA EL KEYERROR
+            
+        elif pestana == "usuarios":
+            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+            
         return df
-    except Exception as e:
-        st.error(f"Error de lectura: {e}")
-        return pd.DataFrame()
+    except: return pd.DataFrame()
         
 
 def enviar_google(payload):
@@ -263,49 +260,49 @@ if opcion == "Ventas":
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
             c1, c2, c3 = st.columns(3)
-            f_ini = c1.date_input("📅 Desde", datetime.now().replace(day=1))
-            f_fin = c2.date_input("📅 Hasta", datetime.now())
+            f_ini = c1.date_input("📅 Desde", datetime.now().date())
+            f_fin = c2.date_input("📅 Hasta", datetime.now().date())
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
             # --- FILTRADO ---
             df_r = df_v_comp.copy()
             
-            # Filtramos por el día (ignorando la hora de la casilla)
-            df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
-            
-            if e_sel != "TODOS":
-                df_r = df_r[df_r['empleado'] == e_sel]
-
-            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
-            
-            if "Pendientes" in filtro_pago:
-                df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
-            elif "Canceladas" in filtro_pago:
-                df_final = df_r[(df_r['estado'] == "PAGADO") | (df_r['saldo_n'] <= 0)]
-            else:
-                df_final = df_r.copy()
-
-            # --- MÉTRICAS ---
-            st.divider()
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
-            m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-            m3.metric("Cartera (Deben)", formato_pesos(df_final['saldo_n'].sum()))
-            
-            # --- TABLA FINAL ---
-            if not df_final.empty:
-                # Columnas que sí o sí existen en el Excel
-                columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+            # Filtramos usando la columna estable que creamos en leer_datos
+            if not df_r.empty:
+                df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
                 
-                # Ordenamos por fecha_dt (que creamos en leer_datos)
-                # Esto pone lo más nuevo de hoy arriba
-                st.dataframe(
-                    df_final[columnas_ver].sort_values('fecha_dt', ascending=False),
-                    use_container_width=True, hide_index=True
-                )
+                if e_sel != "TODOS":
+                    df_r = df_r[df_r['empleado'] == e_sel]
+
+                filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
+                
+                if "Pendientes" in filtro_pago:
+                    df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
+                elif "Canceladas" in filtro_pago:
+                    df_final = df_r[(df_r['estado'] == "PAGADO") | (df_r['saldo_n'] <= 0)]
+                else:
+                    df_final = df_r.copy()
+
+                # --- MÉTRICAS ---
+                st.divider()
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
+                m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
+                m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+                
+                # --- TABLA SIN HORA EN EL FILTRO ---
+                if not df_final.empty:
+                    # Ordenamos por la fecha original para ver la hora real
+                    st.dataframe(
+                        df_final[['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']].sort_values('fecha', ascending=False),
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.info("No hay órdenes para este día.")
             else:
-                st.info("No hay órdenes hoy con estos filtros.")
+                st.warning("No se pudieron cargar los datos del Excel.")
+                
                 
     # --- HISTORIAL FILTRADO ---
     st.divider()
