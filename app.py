@@ -254,21 +254,23 @@ if opcion == "Ventas":
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
             c_f1, c_f2, c_f3 = st.columns(3)
+            # Filtros que el Admin usa
             f_ini = c_f1.date_input("📅 Desde", datetime.now().replace(day=1))
             f_fin = c_f2.date_input("📅 Hasta", datetime.now())
-            
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c_f3.selectbox("👤 Empleado", lista_emp)
             
-            # --- FILTRADO ---
+            # --- LÓGICA DE FILTRADO ---
             df_r = df_v_comp.copy()
-            # Filtramos usando la columna que creamos en leer_datos
+            
+            # Filtramos por fecha usando la columna que creamos arriba
             df_r = df_r[(df_r['fecha_solo_dia'] >= f_ini) & (df_r['fecha_solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
 
-            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
+            # Selector de estado de cuenta
+            filtro_pago = st.radio("Ver órdenes:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
             if "Pendientes" in filtro_pago:
                 df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
@@ -277,22 +279,23 @@ if opcion == "Ventas":
             else:
                 df_final = df_r.copy()
 
-            # --- TABLA Y MÉTRICAS ---
+            # --- MÉTRICAS ---
             st.divider()
             m1, m2, m3 = st.columns(3)
             m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
             m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
             m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
             
+            # --- TABLA SIN ERRORES ---
             if not df_final.empty:
-                # ORDENAMOS POR fecha_dt QUE YA EXISTE EN EL DF
-                columnas = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+                columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+                # Ordenamos por la fecha real para que lo más nuevo salga de primero
                 st.dataframe(
-                    df_final[columnas].sort_values('fecha_dt', ascending=False),
+                    df_final[columnas_ver].sort_values('fecha', ascending=False),
                     use_container_width=True, hide_index=True
                 )
             else:
-                st.info("No hay datos hoy con estos filtros.")
+                st.info("No hay órdenes registradas para estos filtros.")
     
     # --- HISTORIAL FILTRADO ---
     st.divider()
