@@ -118,24 +118,64 @@ if opcion == "Ventas":
     if st.session_state['rol'] == 'admin': t_labels.append("📊 Reportes Avanzados")
     tabs = st.tabs(t_labels)
 
-    with tabs[0]: # REGISTRAR (Sin cambios, usa st.session_state['usuario'])
+   with tabs[0]: # 📝 REGISTRAR (BLOQUE COMPLETO)
         if 'limp' not in st.session_state: st.session_state['limp'] = 0
         v = str(st.session_state['limp'])
-        c1, c2, c3 = st.columns(3)
-        ord, cli, nit = c1.text_input("N° Orden", key="o"+v), c2.text_input("Cliente", key="cl"+v), c3.text_input("NIT", key="ni"+v)
-        c4, c5 = st.columns(2)
-        tot = a_numero(c4.text_input("Total ($ COP)", value="0", key="t"+v))
-        abo = a_numero(c5.text_input("Abono Inicial ($ COP)", value="0", key="a"+v))
-        c4.markdown(f'<div class="money-helper">{formato_pesos(tot)}</div>', unsafe_allow_html=True)
-        c5.markdown(f'<div class="money-helper">{formato_pesos(abo)}</div>', unsafe_allow_html=True)
-        desc = st.text_area("Descripción", key="d"+v)
+        
+        c1, c2 = st.columns(2)
+        ord = c1.text_input("N° Orden", key="o"+v)
+        cli = c2.text_input("Cliente", key="cl"+v)
+        
+        c3, c4, c5 = st.columns(3)
+        nit = c3.text_input("NIT / CC", key="ni"+v)
+        cel = c4.text_input("Celular", key="ce"+v)
+        cor = c5.text_input("Correo", key="co"+v)
+        
         c6, c7 = st.columns(2)
-        est, pag = c6.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+v), c7.selectbox("Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA"], key="p"+v)
-        if st.button("💾 GUARDAR VENTA", use_container_width=True):
-            if ord and cli:
-                p = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": ord, "descripcion": desc, "total": float(tot), "abono": float(abo), "saldo": float(tot-abo), "metodo_pago": pag, "estado": est, "empleado": st.session_state['usuario'], "cliente": cli, "nit": nit, "celular": "", "correo": "", "factura": "NO", "historial_pagos": f"${abo:,.0f} ({pag}) {datetime.now().date()}"}
-                if enviar_google(p): st.session_state['limp'] += 1; st.rerun()
+        tot = a_numero(c6.text_input("Total ($ COP)", value="0", key="t"+v))
+        abo = a_numero(c7.text_input("Abono Inicial ($ COP)", value="0", key="a"+v))
+        
+        # Ayudas visuales de moneda
+        c6.markdown(f'<div class="money-helper">{formato_pesos(tot)}</div>', unsafe_allow_html=True)
+        c7.markdown(f'<div class="money-helper">{formato_pesos(abo)}</div>', unsafe_allow_html=True)
+        
+        desc = st.text_area("Descripción del Trabajo", key="d"+v)
+        
+        c8, c9, c10 = st.columns(3)
+        est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+v)
+        pag = c9.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA"], key="p"+v)
+        fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
+        if st.button("💾 GUARDAR VENTA", use_container_width=True):
+            if not ord or not cli:
+                st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
+            else:
+                # Armamos el paquete de datos para Google Sheets
+                p = {
+                    "accion": "insertar",
+                    "tipo_registro": "ventas",
+                    "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "n_orden": ord,
+                    "descripcion": desc,
+                    "total": float(tot),
+                    "abono": float(abo),
+                    "saldo": float(tot - abo),
+                    "metodo_pago": pag,
+                    "estado": est,
+                    "empleado": st.session_state['usuario'], # Se guarda quién lo registró
+                    "cliente": cli,
+                    "nit": nit,
+                    "celular": cel,
+                    "correo": cor,
+                    "factura": fac,
+                    "historial_pagos": f"{formato_pesos(abo)} ({pag}) {datetime.now().strftime('%d/%m/%Y')}"
+                }
+                
+                if enviar_google(p):
+                    st.success(f"✅ Orden {ord} guardada con éxito")
+                    st.session_state['limp'] += 1 # Limpia el formulario
+                    st.rerun()
+                    
     with tabs[1]: # ✏️ EDITAR / ABONAR / ELIMINAR
         if not df_v.empty:
             sel = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
