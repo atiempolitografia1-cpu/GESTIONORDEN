@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 import io
 import re
-# 1. NUEVA IMPORTACIÓN
+# La librería que acabas de añadir al requirements
 from streamlit_currency_input import currency_input
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
