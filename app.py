@@ -275,10 +275,14 @@ if opcion == "Ventas":
                 df_final = df_r.copy()
                 st.caption("Mostrando todos los registros en este rango.")
             
-            with filtro_pago[1]: # SOLO PENDIENTES (CARTERA)
-                # Filtra donde el saldo sea mayor a 0 o el estado no sea PAGADO
-                df_final = df_r[df_r['saldo_n'] > 0]
-                st.caption("Mostrando órdenes con saldos pendientes por cobrar.")
+            with filtro_pago[1]: # 💸 SOLO PENDIENTES (CARTERA)
+                # CORRECCIÓN: Filtramos por saldo mayor a 0 
+                # y nos aseguramos de que el estado no sea 'PAGADO'
+                df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
+                st.caption(f"🔍 Órdenes con dinero pendiente de {e_sel}")
+                
+                if df_final.empty:
+                    st.success(f"✨ ¡Felicidades! {e_sel} no tiene cuentas pendientes en este rango.")
                 
             with filtro_pago[2]: # SOLO CANCELADAS
                 # Filtra donde el saldo sea 0 o el estado sea PAGADO
