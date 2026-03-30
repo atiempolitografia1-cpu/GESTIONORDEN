@@ -259,7 +259,7 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # 📊 REPORTES (ADMIN)
+       with tabs[2]: # 📊 REPORTES (ADMIN) - SOLUCIÓN DEFINITIVA
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
             c1, c2, c3 = st.columns(3)
@@ -269,17 +269,18 @@ if opcion == "Ventas":
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
-            # --- LÓGICA DE FILTRADO (IGNORANDO LA HORA) ---
+            # --- PROCESAMIENTO DE DATOS ---
             df_r = df_v_comp.copy()
             
-            # 1. Convertimos la columna 'fecha' a formato fecha real de Python
+            # Convertimos la fecha del Excel a formato real de Python
             df_r['fecha_limpia'] = pd.to_datetime(df_r['fecha'], errors='coerce')
             
-            # 2. EL TRUCO: Extraemos solo la parte del día (sin horas, minutos ni segundos)
-            df_r['solo_el_dia'] = df_r['fecha_limpia'].dt.date
+            # Creamos una columna que sea SOLO EL DÍA (sin hora) para comparar con el filtro
+            df_r['solo_dia'] = df_r['fecha_limpia'].dt.date
             
-            # 3. Ahora filtramos: el día debe estar entre f_ini y f_fin
-            df_r = df_r[(df_r['solo_el_dia'] >= f_ini) & (df_r['solo_el_dia'] <= f_fin)]
+            # --- FILTRADO POR FECHA Y EMPLEADO ---
+            # Ahora comparamos día contra día (sin horas de por medio)
+            df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
@@ -294,22 +295,25 @@ if opcion == "Ventas":
             else:
                 df_final = df_r.copy()
 
-            # --- MÉTRICAS Y TABLA ---
+            # --- MÉTRICAS ---
             st.divider()
             m1, m2, m3 = st.columns(3)
             m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
             m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-            m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+            m3.metric("Cartera (Deben)", formato_pesos(df_final['saldo_n'].sum()))
             
+            # --- TABLA FINAL (SIN KEYERROR) ---
             if not df_final.empty:
-                # Usamos 'fecha_limpia' para que el orden sea exacto por hora (lo más nuevo arriba)
+                # Usamos solo columnas que sabemos que existen en el Excel original
+                columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+                
+                # Ordenamos por 'fecha_limpia' para que lo más nuevo (por hora) salga arriba
                 st.dataframe(
-                    df_final[['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']].sort_values('fecha_limpia', ascending=False),
+                    df_final[columnas_ver].sort_values('fecha_limpia', ascending=False),
                     use_container_width=True, hide_index=True
                 )
             else:
-                st.info(f"No hay registros encontrados para el día {f_fin}.")
-    
+                st.info(f"No hay registros encontrados para el periodo seleccionado.")
     # --- HISTORIAL FILTRADO ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
