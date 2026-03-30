@@ -215,7 +215,7 @@ if opcion == "Ventas":
                             st.rerun()
 
 
- with tabs[2]: # REPORTES AVANZADOS (RESTAURADO)
+        with tabs[2]: # REPORTES AVANZADOS (RESTAURADO)
         st.subheader("📊 Filtros de Reporte")
         c1, c2, c3 = st.columns(3)
         f_ini = c1.date_input("Desde", datetime.now().replace(day=1))
