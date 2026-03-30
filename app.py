@@ -8,36 +8,24 @@ import re
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
 
-# Inyectamos el script para formato de moneda automático en tiempo real
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stDeployButton {display:none;}
-    button[kind="headerNoPadding"] { visibility: visible !important; z-index: 9999991; background-color: rgba(255,255,255,0.1); border-radius: 5px; }
+    /* Estilo para la confirmación de dinero en verde */
+    .money-preview {
+        color: #00802b;
+        font-weight: bold;
+        background-color: #e6ffed;
+        padding: 2px 10px;
+        border-radius: 5px;
+        border: 1px solid #b7eb8f;
+        display: inline-block;
+        margin-top: -15px;
+        margin-bottom: 10px;
+    }
     [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00802b; }
     </style>
-    
-    <script>
-    const formatCurrency = (e) => {
-        let value = e.target.value.replace(/\D/g, "");
-        if (value) {
-            e.target.value = new Intl.NumberFormat('de-DE').format(value);
-        }
-    };
-
-    const parentDoc = window.parent.document;
-    
-    // Intervalo para buscar los inputs y aplicarles el formato
-    setInterval(() => {
-        const inputs = parentDoc.querySelectorAll('input[aria-label*="($ COP)"]');
-        inputs.forEach(input => {
-            if (!input.dataset.masked) {
-                input.addEventListener('input', formatCurrency);
-                input.dataset.masked = "true";
-            }
-        });
-    }, 1000);
-    </script>
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
@@ -45,6 +33,7 @@ URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwefjYpHKmQNY6BY9-DXWAxk2G
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
+    """Convierte un número a formato $ 1.234.567"""
     try:
         val = float(valor)
         return f"$ {val:,.0f}".replace(",", ".")
@@ -52,9 +41,11 @@ def formato_pesos(valor):
         return "$ 0"
 
 def a_numero(valor):
+    """Limpia el texto para convertirlo en número funcional"""
     try:
         if not valor: return 0.0
-        s = re.sub(r'[^\d]', '', str(valor))
+        # Elimina cualquier cosa que no sea número o punto decimal
+        s = re.sub(r'[^\d.]', '', str(valor))
         return float(s) if s else 0.0
     except: return 0.0
 
@@ -121,17 +112,14 @@ if opcion == "Ventas":
         v_ord = c1.text_input("N° Orden", key="o"+vs)
         v_cli = c2.text_input("Cliente", key="cl"+vs)
         v_nit = c3.text_input("NIT / CC", key="ni"+vs)
-        c4, c5, c6 = st.columns(3)
-        v_cel = c4.text_input("Celular", key="ce"+vs)
-        v_cor = c5.text_input("Correo", key="co"+vs)
-        v_fac = c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
         
         c7, c8 = st.columns(2)
-        v_tot_raw = c7.text_input("Total ($ COP)", key="tr"+vs, value="0")
-        v_abo_raw = c8.text_input("Abono Inicial ($ COP)", key="ar"+vs, value="0")
+        # Cambiado a number_input para evitar errores de librerías
+        v_tot = c7.number_input("Total Venta ($)", min_value=0, step=1000, key="tr"+vs)
+        c7.markdown(f'<div class="money-preview">Confirmado: {formato_pesos(v_tot)}</div>', unsafe_allow_html=True)
         
-        v_tot = a_numero(v_tot_raw)
-        v_abo = a_numero(v_abo_raw)
+        v_abo = c8.number_input("Abono Inicial ($)", min_value=0, step=1000, key="ar"+vs)
+        c8.markdown(f'<div class="money-preview">Confirmado: {formato_pesos(v_abo)}</div>', unsafe_allow_html=True)
         
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
         c9, c10 = st.columns(2)
@@ -140,7 +128,7 @@ if opcion == "Ventas":
         
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
-                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
+                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
     with tabs[1]: # EDITAR ORDEN
@@ -153,25 +141,20 @@ if opcion == "Ventas":
                 
                 with st.form("form_edit"):
                     st.info(f"Editando Orden: {orden_buscada}")
-                    col1, col2 = st.columns(2)
-                    e_cli = col1.text_input("Cliente", value=val['cliente'])
-                    e_nit = col2.text_input("NIT / CC", value=val['nit'])
-                    
+                    e_cli = st.text_input("Cliente", value=val['cliente'])
                     e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                     
                     col6, col7 = st.columns(2)
-                    # Formateamos el valor inicial con puntos para que el JS lo reconozca
-                    val_tot_ini = f"{int(val['total_n']):,}".replace(",", ".")
-                    e_tot_raw = col6.text_input("Total ($ COP)", value=val_tot_ini)
-                    e_nuevo_abo_raw = col7.text_input("Añadir nuevo abono ($ COP)", value="0")
+                    e_tot = col6.number_input("Total de la Venta ($)", value=int(val['total_n']), step=1000)
+                    col6.markdown(f'<div class="money-preview">{formato_pesos(e_tot)}</div>', unsafe_allow_html=True)
                     
-                    e_tot = a_numero(e_tot_raw)
-                    e_nuevo_abo = a_numero(e_nuevo_abo_raw)
+                    e_nuevo_abo = col7.number_input("¿Cuánto abona HOY? ($)", value=0, step=1000)
+                    col7.markdown(f'<div class="money-preview">Abono hoy: {formato_pesos(e_nuevo_abo)}</div>', unsafe_allow_html=True)
                     
                     abono_total_acumulado = val['abono_n'] + e_nuevo_abo
                     nuevo_saldo = e_tot - abono_total_acumulado
                     
-                    st.warning(f"Saldo previo: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
+                    st.warning(f"Saldo previo: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo Final: {formato_pesos(nuevo_saldo)}**")
                     
                     col8, col9 = st.columns(2)
                     e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
@@ -184,12 +167,13 @@ if opcion == "Ventas":
                         
                         payload = {
                             "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": orden_buscada,
-                            "cliente": e_cli, "nit": e_nit, "descripcion": e_desc, "total": e_tot, 
+                            "cliente": e_cli, "descripcion": e_desc, "total": e_tot, 
                             "abono": abono_total_acumulado, "saldo": nuevo_saldo, "estado": e_est, "historial_pagos": hist_act
                         }
                         if enviar_google(payload): st.success("✅ Orden actualizada"); st.rerun()
         else:
             st.warning("No hay órdenes.")
+            
 
     if st.session_state['rol'] == 'admin':
         with tabs[2]: # REPORTES
