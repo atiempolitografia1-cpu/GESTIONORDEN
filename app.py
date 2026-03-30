@@ -258,43 +258,33 @@ if opcion == "Ventas":
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c_f3.selectbox("👤 Empleado", lista_emp, key="rep_emp")
             
-            # --- FILTRO DE ESTADO DE CUENTA (LO QUE PEDISTE) ---
-            c_f4, c_f5 = st.columns([2, 1])
-            filtro_pago = c_f4.tabs(["📑 Todo", "💸 Solo Pendientes (Deben)", "✅ Solo Canceladas"])
-            
-            # --- LÓGICA DE FILTRADO MAESTRA ---
-            # --- LÓGICA DE FILTRADO CORREGIDA ---
+            # --- LÓGICA DE FILTRADO MAESTRA (CORREGIDA PARA HOY) ---
             df_r = df_v_comp.copy()
             
-            # Limpiamos las fechas y nos aseguramos de que sean solo DATE (sin hora) para comparar
-            df_r['fecha_dt_solo_dia'] = pd.to_datetime(df_r['fecha']).dt.date
+            # Convertimos con errors='coerce' para que no salga el cuadro rojo si hay basura en el Excel
+            df_r['fecha_temp'] = pd.to_datetime(df_r['fecha'], errors='coerce')
             
-            # Ahora sí filtramos usando solo el día
-            df_r = df_r[(df_r['fecha_dt_solo_dia'] >= f_ini) & (df_r['fecha_dt_solo_dia'] <= f_fin)]
+            # Extraemos solo la fecha (sin hora) para comparar con los calendarios de Streamlit
+            df_r['fecha_solo_dia'] = df_r['fecha_temp'].dt.date
+            
+            # Filtramos por el rango de fechas seleccionado
+            df_r = df_r[(df_r['fecha_solo_dia'] >= f_ini) & (df_r['fecha_solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
 
-            # --- SUB-FILTROS POR PESTAÑA ---
-            with filtro_pago[0]: # TODO
-                df_final = df_r.copy()
-                st.caption("Mostrando todos los registros en este rango.")
+            # --- FILTRO DE ESTADO DE CUENTA ---
+            filtro_pago = st.radio("Filtrar por pago:", ["📑 Todo", "💸 Solo Pendientes (Deben)", "✅ Solo Canceladas"], horizontal=True)
             
-            with filtro_pago[1]: # 💸 SOLO PENDIENTES (CARTERA TOTAL)
-                # Aquí usamos df_v_comp (toda la base) filtrada por empleado pero IGNORANDO fechas
-                df_pendientes = df_v_comp[df_v_comp['saldo_n'] > 0]
-                if e_sel != "TODOS":
-                    pendientes_emp = df_pendientes[df_pendientes['empleado'] == e_sel]
-                else:
-                    pendientes_emp = df_pendientes
-                
-                df_final = pendientes_emp.copy()
-                st.caption(f"⚠️ Cartera TOTAL acumulada de {e_sel} (Sin importar la fecha)")
-                
-            with filtro_pago[2]: # SOLO CANCELADAS
-                # Filtra donde el saldo sea 0 o el estado sea PAGADO
+            if "Solo Pendientes" in filtro_pago:
+                df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
+                st.caption(f"🔍 Mostrando deudas de {e_sel}")
+            elif "Solo Canceladas" in filtro_pago:
                 df_final = df_r[(df_r['estado'] == "PAGADO") | (df_r['saldo_n'] <= 0)]
-                st.caption("Mostrando órdenes que ya fueron liquidadas al 100%.")
+                st.caption(f"🔍 Mostrando lo pagado de {e_sel}")
+            else:
+                df_final = df_r.copy()
+                st.caption(f"🔍 Mostrando todos los registros de {e_sel}")
 
             # --- MÉTRICAS DINÁMICAS ---
             st.divider()
@@ -303,28 +293,21 @@ if opcion == "Ventas":
             s_total = df_final['saldo_n'].sum()
             
             m1, m2, m3 = st.columns(3)
-            m1.metric("Valor Total Órdenes", formato_pesos(v_total))
-            m2.metric("Total Recaudado", formato_pesos(a_total), delta=f"+ {formato_pesos(a_total)}", delta_color="normal")
-            m3.metric("Cartera (Por Cobrar)", formato_pesos(s_total), delta=f"- {formato_pesos(s_total)}", delta_color="inverse")
+            m1.metric("Valor Total", formato_pesos(v_total))
+            m2.metric("Recaudado", formato_pesos(a_total))
+            m3.metric("Cartera (Deben)", formato_pesos(s_total))
             
             # --- TABLA FINAL ---
             if not df_final.empty:
-                # Color de las filas según el saldo para que sea visual
+                # Mostramos las columnas importantes, incluyendo el empleado para el Admin
+                columnas = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
                 st.dataframe(
-                    df_final[['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']].sort_values('fecha', ascending=False),
+                    df_final[columnas].sort_values('fecha_temp', ascending=False),
                     use_container_width=True,
                     hide_index=True
                 )
-                
-                # Resumen rápido por empleado en este filtro
-                if e_sel == "TODOS":
-                    st.write("---")
-                    st.write("📊 **Dinero por Empleado (en esta selección):**")
-                    resumen = df_final.groupby('empleado')[['total_n', 'abono_n', 'saldo_n']].sum()
-                    st.table(resumen.style.format(formato_pesos))
             else:
-                st.info("No hay datos que coincidan con estos filtros.")
-
+                st.info("No hay datos para mostrar con estos filtros. Prueba ampliando las fechas.")
     
     # --- HISTORIAL FILTRADO ---
     st.divider()
