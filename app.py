@@ -46,7 +46,6 @@ def a_numero(valor):
     """Limpia el texto para convertirlo en número funcional"""
     try:
         if not valor: return 0.0
-        # Elimina símbolos de peso, puntos de miles y espacios
         s = re.sub(r'[^\d,]', '', str(valor)).replace(',', '.')
         return float(s) if s else 0.0
     except: return 0.0
@@ -104,7 +103,16 @@ with st.sidebar:
 
 if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
-    df_v = leer_datos("ventas")
+    
+    # --- FILTRO DE PRIVACIDAD ---
+    # Cargamos todos los datos, pero filtramos según el rol del usuario logueado
+    df_v_completo = leer_datos("ventas")
+    
+    if st.session_state['rol'] == 'admin':
+        df_v = df_v_completo.copy()
+    else:
+        # El empleado solo ve las filas donde la columna 'empleado' coincide con su nombre de login
+        df_v = df_v_completo[df_v_completo['empleado'] == st.session_state['usuario']].copy()
     
     tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"]) if st.session_state['rol'] == 'admin' else st.tabs(["📝 Registrar", "✏️ Editar / Abonar"])
 
@@ -121,12 +129,10 @@ if opcion == "Ventas":
         v_fac = c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
         
         c7, c8 = st.columns(2)
-        # Input de Total con visor de moneda
         v_tot_raw = c7.text_input("Total ($ COP)", placeholder="Escribe el valor...", key="tr"+vs)
         v_tot = a_numero(v_tot_raw)
         c7.markdown(f'<div class="money-helper">{formato_pesos(v_tot)}</div>', unsafe_allow_html=True)
         
-        # Input de Abono con visor de moneda
         v_abo_raw = c8.text_input("Abono Inicial ($ COP)", placeholder="Escribe el abono...", key="ar"+vs)
         v_abo = a_numero(v_abo_raw)
         c8.markdown(f'<div class="money-helper">{formato_pesos(v_abo)}</div>', unsafe_allow_html=True)
@@ -141,9 +147,10 @@ if opcion == "Ventas":
                 payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
-    with tabs[1]: # EDITAR ORDEN COMPLETO
+    with tabs[1]: # EDITAR ORDEN (Solo verá sus propias órdenes en el selectbox)
         st.subheader("Modificar Orden Existente")
         if not df_v.empty:
+            # Aquí el selectbox solo muestra las órdenes filtradas previamente
             orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
             
             if orden_buscada != "Seleccionar...":
@@ -164,7 +171,6 @@ if opcion == "Ventas":
                     e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                     
                     col6, col7 = st.columns(2)
-                    # Dinero en Edición
                     e_tot_raw = col6.text_input("Total ($ COP)", value=str(int(val['total_n'])))
                     e_tot = a_numero(e_tot_raw)
                     col6.markdown(f'<div class="money-helper">{formato_pesos(e_tot)}</div>', unsafe_allow_html=True)
@@ -194,10 +200,10 @@ if opcion == "Ventas":
                         }
                         if enviar_google(payload): st.success("✅ Orden actualizada"); st.rerun()
         else:
-            st.warning("No hay órdenes para mostrar.")
+            st.warning("No tienes órdenes registradas bajo tu usuario.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # REPORTES
+        with tabs[2]: # REPORTES (Solo Admin)
             st.subheader("📊 Auditoría de Caja")
             f1, f2 = st.columns(2)
             sel_emp = f1.selectbox("👤 Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
@@ -230,9 +236,10 @@ if opcion == "Ventas":
             df_m['saldo'] = df_m['saldo_n'].apply(formato_pesos)
             st.dataframe(df_m.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
 
+    # --- HISTORIAL GENERAL (Filtrado por Usuario) ---
     st.divider()
-    st.subheader("📋 Historial")
-    df_h = df_v.copy()
+    st.subheader("📋 Mi Historial" if st.session_state['rol'] != 'admin' else "📋 Historial General")
+    df_h = df_v.copy() # df_v ya viene filtrado desde arriba
     df_h['total'] = df_h['total_n'].apply(formato_pesos)
     df_h['abono'] = df_h['abono_n'].apply(formato_pesos)
     df_h['saldo'] = df_h['saldo_n'].apply(formato_pesos)
