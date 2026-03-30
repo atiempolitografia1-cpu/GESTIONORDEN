@@ -40,10 +40,10 @@ def formato_pesos(valor):
         return "$ 0"
 
 def a_numero(valor):
-    """Limpia el texto para convertirlo en número real, ignorando puntos de miles"""
+    """Limpia el texto para convertirlo en número real funcional"""
     try:
         if valor is None or str(valor).strip() == "": return 0.0
-        # Eliminamos $, espacios y puntos (que suelen ser de miles)
+        # Eliminamos símbolos y corregimos puntuación para que Python entienda el número
         s = str(valor).replace("$", "").replace(".", "").replace(" ", "").replace(",", ".")
         return float(s) if s else 0.0
     except:
@@ -159,12 +159,10 @@ if opcion == "Ventas":
                 }
                 if enviar_google(payload): 
                     st.session_state['limp_v'] += 1
-                    st.success("✅ Venta registrada en Excel")
+                    st.success("✅ Venta registrada")
                     st.rerun()
-            else:
-                st.warning("El N° de Orden y el Cliente son obligatorios.")
 
-    with tabs[1]: # EDITAR / ABONAR
+    with tabs[1]: # EDITAR / ABONAR (COMPLETO)
         st.subheader("Modificar Orden Existente")
         if not df_v.empty:
             orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
@@ -174,10 +172,15 @@ if opcion == "Ventas":
                 val = df_v.loc[idx]
                 
                 with st.form("form_edit"):
-                    st.info(f"Editando Orden: {orden_buscada}")
+                    st.info(f"Editando Orden: {orden_buscada} | Registrada por: {val['empleado']}")
                     col1, col2 = st.columns(2)
                     e_cli = col1.text_input("Cliente", value=val['cliente'])
                     e_nit = col2.text_input("NIT / CC", value=val['nit'])
+                    
+                    col3, col4, col5 = st.columns(3)
+                    e_cel = col3.text_input("Celular", value=val['celular'])
+                    e_cor = col4.text_input("Correo", value=val['correo'])
+                    e_fac = col5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura'] == "SÍ" else 1)
                     
                     e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                     
@@ -203,15 +206,15 @@ if opcion == "Ventas":
                         
                         payload = {
                             "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": orden_buscada,
-                            "cliente": e_cli, "nit": e_nit, "descripcion": e_desc, 
-                            "total": float(e_tot), "abono": float(abono_acumulado),
+                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
+                            "descripcion": e_desc, "total": float(e_tot), "abono": float(abono_acumulado),
                             "saldo": float(saldo_final), "estado": e_est, "historial_pagos": hist_act
                         }
                         if enviar_google(payload): 
-                            st.success("✅ Excel actualizado correctamente")
+                            st.success("✅ Orden actualizada en Excel")
                             st.rerun()
 
-    # --- HISTORIAL GENERAL ---
+    # --- HISTORIAL ---
     st.divider()
     st.subheader("📋 Historial")
     busqueda = st.text_input("🔍 Buscar orden, cliente o descripción:")
@@ -227,8 +230,6 @@ if opcion == "Ventas":
     df_h['saldo'] = df_h['saldo_n'].apply(formato_pesos)
     st.dataframe(df_h.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore').iloc[::-1], use_container_width=True, hide_index=True)
 
-
-    # ... (Resto del código de empleados igual que antes)
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
     df_u = leer_datos("usuarios")
