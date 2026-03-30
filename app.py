@@ -265,36 +265,49 @@ if opcion == "Ventas":
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
-            # --- FILTRADO ---
-           # --- LÓGICA DE FILTRADO CORREGIDA ---
-            if "Pendientes" in filtro_pago:
-                # Muestra solo lo que tenga deuda real
-                df_final = df_r[df_r['saldo_n'] > 0]
-            elif "Canceladas" in filtro_pago:
-                # Muestra solo lo que esté en $0
-                df_final = df_r[df_r['saldo_n'] <= 0]
-            else:
-                df_final = df_r.copy()
-
-            # --- MÉTRICAS ---
-            st.divider()
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
-            m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-            m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+            # --- ESTA ES LA LÍNEA QUE TE FALTA ---
+            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
-            # --- TABLA FINAL ---
-            if not df_final.empty:
-                # Ordenamos para que lo más reciente salga primero
-                columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
-                st.dataframe(
-                    df_final[columnas_ver].sort_values('fecha', ascending=False),
-                    use_container_width=True, hide_index=True
-                )
+            # --- FILTRADO ---
+            df_r = df_v_comp.copy()
+            
+            # 1. Filtro de Fecha (Usando la columna 'solo_dia' que creamos en leer_datos)
+            if not df_r.empty and 'solo_dia' in df_r.columns:
+                df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
+                
+                # 2. Filtro de Empleado
+                if e_sel != "TODOS":
+                    df_r = df_r[df_r['empleado'] == e_sel]
+
+                # 3. Filtro de Pago (MATEMÁTICO: Solo saldo 0 es cancelado)
+                if "Pendientes" in filtro_pago:
+                    df_final = df_r[df_r['saldo_n'] > 0]
+                elif "Canceladas" in filtro_pago:
+                    df_final = df_r[df_r['saldo_n'] <= 0]
+                else:
+                    df_final = df_r.copy()
+
+                # --- MÉTRICAS ---
+                st.divider()
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
+                m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
+                m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+                
+                # --- TABLA FINAL ---
+                if not df_final.empty:
+                    columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+                    st.dataframe(
+                        df_final[columnas_ver].sort_values('fecha', ascending=False),
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.info("No hay órdenes con estos filtros.")
             else:
-                st.info("No hay órdenes con estos filtros en este rango de fechas.")
-                
-                
+                st.warning("Asegúrate de que la función leer_datos esté actualizada con 'solo_dia'.")
+
+
+    
     # --- HISTORIAL FILTRADO ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
