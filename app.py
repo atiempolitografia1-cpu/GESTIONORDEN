@@ -247,72 +247,74 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # 📊 REPORTES AVANZADOS (PARA ADMIN)
-            st.subheader("📁 Centro de Reportes y Control")
+        with tabs[2]: # 📊 REPORTES DE AUDITORÍA Y CONTROL (ADMIN)
+            st.subheader("🧐 Auditoría de Ventas y Cartera")
             
-            # --- FILTROS DE BÚSQUEDA ---
-            col_f1, col_f2, col_f3 = st.columns(3)
-            f_inicio = col_f1.date_input("Fecha Inicio", datetime.now().replace(day=1))
-            f_fin = col_f2.date_input("Fecha Fin", datetime.now())
+            # --- FILTROS SUPERIORES ---
+            c_f1, c_f2, c_f3 = st.columns(3)
+            f_ini = c_f1.date_input("📅 Desde", datetime.now().replace(day=1), key="rep_f_ini")
+            f_fin = c_f2.date_input("📅 Hasta", datetime.now(), key="rep_f_fin")
             
-            # Lista de empleados para filtrar + opción "TODOS"
-            lista_empleados = ["TODOS"] + df_users_db['nombre'].tolist()
-            emp_sel = col_f3.selectbox("Filtrar por Empleado", lista_empleados)
+            lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
+            e_sel = c_f3.selectbox("👤 Empleado", lista_emp, key="rep_emp")
             
-            # --- LÓGICA DE FILTRADO ---
-            df_rep = df_v_comp.copy()
+            # --- FILTRO DE ESTADO DE CUENTA (LO QUE PEDISTE) ---
+            c_f4, c_f5 = st.columns([2, 1])
+            filtro_pago = c_f4.tabs(["📑 Todo", "💸 Solo Pendientes (Deben)", "✅ Solo Canceladas"])
             
-            # 1. Filtrar por Fechas (limpiando datos erróneos)
-            df_rep = df_rep[df_rep['fecha_dt'].notna()]
-            df_rep = df_rep[(df_rep['fecha_dt'].dt.date >= f_inicio) & (df_rep['fecha_dt'].dt.date <= f_fin)]
+            # --- LÓGICA DE FILTRADO MAESTRA ---
+            df_r = df_v_comp.copy()
+            df_r = df_r[df_r['fecha_dt'].notna()]
+            df_r = df_r[(df_r['fecha_dt'].dt.date >= f_ini) & (df_r['fecha_dt'].dt.date <= f_fin)]
             
-            # 2. Filtrar por Empleado
-            if emp_sel != "TODOS":
-                df_rep = df_rep[df_rep['empleado'] == emp_sel]
+            if e_sel != "TODOS":
+                df_r = df_r[df_r['empleado'] == e_sel]
+
+            # --- SUB-FILTROS POR PESTAÑA ---
+            with filtro_pago[0]: # TODO
+                df_final = df_r.copy()
+                st.caption("Mostrando todos los registros en este rango.")
             
-            # --- MÉTRICAS ---
-            st.divider()
-            m1, m2, m3, m4 = st.columns(4)
-            total_v = df_rep['total_n'].sum()
-            total_a = df_rep['abono_n'].sum()
-            total_s = df_rep['saldo_n'].sum()
-            cant_o = len(df_rep)
-            
-            m1.metric("Órdenes", f"{cant_o}")
-            m2.metric("Ventas Totales", formato_pesos(total_v))
-            m3.metric("Recaudado (Abonos)", formato_pesos(total_a))
-            m4.metric("Saldos Pendientes", formato_pesos(total_s))
-            
-            # --- TABLA DE RESULTADOS ---
-            st.markdown(f"### Detalle de Ventas: {emp_sel}")
-            if not df_rep.empty:
-                # Ordenar por fecha más reciente
-                df_rep = df_rep.sort_values(by='fecha_dt', ascending=False)
+            with filtro_pago[1]: # SOLO PENDIENTES (CARTERA)
+                # Filtra donde el saldo sea mayor a 0 o el estado no sea PAGADO
+                df_final = df_r[df_r['saldo_n'] > 0]
+                st.caption("Mostrando órdenes con saldos pendientes por cobrar.")
                 
+            with filtro_pago[2]: # SOLO CANCELADAS
+                # Filtra donde el saldo sea 0 o el estado sea PAGADO
+                df_final = df_r[(df_r['estado'] == "PAGADO") | (df_r['saldo_n'] <= 0)]
+                st.caption("Mostrando órdenes que ya fueron liquidadas al 100%.")
+
+            # --- MÉTRICAS DINÁMICAS ---
+            st.divider()
+            v_total = df_final['total_n'].sum()
+            a_total = df_final['abono_n'].sum()
+            s_total = df_final['saldo_n'].sum()
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Valor Total Órdenes", formato_pesos(v_total))
+            m2.metric("Total Recaudado", formato_pesos(a_total), delta=f"+ {formato_pesos(a_total)}", delta_color="normal")
+            m3.metric("Cartera (Por Cobrar)", formato_pesos(s_total), delta=f"- {formato_pesos(s_total)}", delta_color="inverse")
+            
+            # --- TABLA FINAL ---
+            if not df_final.empty:
+                # Color de las filas según el saldo para que sea visual
                 st.dataframe(
-                    df_rep[['fecha', 'n_orden', 'cliente', 'descripcion', 'total', 'abono', 'saldo', 'estado', 'empleado']],
+                    df_final[['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']].sort_values('fecha', ascending=False),
                     use_container_width=True,
                     hide_index=True
                 )
                 
-                # --- BOTÓN PARA DESCARGAR (Opcional pero útil) ---
-                csv = df_rep.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Descargar Reporte en CSV",
-                    data=csv,
-                    file_name=f"reporte_{emp_sel}_{f_inicio}.csv",
-                    mime="text/csv",
-                )
+                # Resumen rápido por empleado en este filtro
+                if e_sel == "TODOS":
+                    st.write("---")
+                    st.write("📊 **Dinero por Empleado (en esta selección):**")
+                    resumen = df_final.groupby('empleado')[['total_n', 'abono_n', 'saldo_n']].sum()
+                    st.table(resumen.style.format(formato_pesos))
             else:
-                st.warning("No se encontraron registros para estos filtros.")
+                st.info("No hay datos que coincidan con estos filtros.")
 
-            # --- GRÁFICO RÁPIDO (Visualización) ---
-            if not df_rep.empty and cant_o > 0:
-                st.write("---")
-                st.write("📈 **Resumen de Estados**")
-                resumen_estados = df_rep['estado'].value_counts()
-                st.bar_chart(resumen_estados)
-
+    
     # --- HISTORIAL FILTRADO ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
