@@ -263,9 +263,14 @@ if opcion == "Ventas":
             filtro_pago = c_f4.tabs(["📑 Todo", "💸 Solo Pendientes (Deben)", "✅ Solo Canceladas"])
             
             # --- LÓGICA DE FILTRADO MAESTRA ---
+            # --- LÓGICA DE FILTRADO CORREGIDA ---
             df_r = df_v_comp.copy()
-            df_r = df_r[df_r['fecha_dt'].notna()]
-            df_r = df_r[(df_r['fecha_dt'].dt.date >= f_ini) & (df_r['fecha_dt'].dt.date <= f_fin)]
+            
+            # Limpiamos las fechas y nos aseguramos de que sean solo DATE (sin hora) para comparar
+            df_r['fecha_dt_solo_dia'] = pd.to_datetime(df_r['fecha']).dt.date
+            
+            # Ahora sí filtramos usando solo el día
+            df_r = df_r[(df_r['fecha_dt_solo_dia'] >= f_ini) & (df_r['fecha_dt_solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
@@ -275,14 +280,16 @@ if opcion == "Ventas":
                 df_final = df_r.copy()
                 st.caption("Mostrando todos los registros en este rango.")
             
-            with filtro_pago[1]: # 💸 SOLO PENDIENTES (CARTERA)
-                # CORRECCIÓN: Filtramos por saldo mayor a 0 
-                # y nos aseguramos de que el estado no sea 'PAGADO'
-                df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
-                st.caption(f"🔍 Órdenes con dinero pendiente de {e_sel}")
+            with filtro_pago[1]: # 💸 SOLO PENDIENTES (CARTERA TOTAL)
+                # Aquí usamos df_v_comp (toda la base) filtrada por empleado pero IGNORANDO fechas
+                df_pendientes = df_v_comp[df_v_comp['saldo_n'] > 0]
+                if e_sel != "TODOS":
+                    pendientes_emp = df_pendientes[df_pendientes['empleado'] == e_sel]
+                else:
+                    pendientes_emp = df_pendientes
                 
-                if df_final.empty:
-                    st.success(f"✨ ¡Felicidades! {e_sel} no tiene cuentas pendientes en este rango.")
+                df_final = pendientes_emp.copy()
+                st.caption(f"⚠️ Cartera TOTAL acumulada de {e_sel} (Sin importar la fecha)")
                 
             with filtro_pago[2]: # SOLO CANCELADAS
                 # Filtra donde el saldo sea 0 o el estado sea PAGADO
