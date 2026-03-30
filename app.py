@@ -263,25 +263,28 @@ if opcion == "Ventas":
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
             c1, c2, c3 = st.columns(3)
-            # Usamos date_input para obtener objetos de tipo 'date'
             f_ini = c1.date_input("📅 Desde", datetime.now().replace(day=1))
             f_fin = c2.date_input("📅 Hasta", datetime.now())
             
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
-            # --- FILTRADO MAESTRO ---
+            # --- LÓGICA DE FILTRADO (IGNORANDO LA HORA) ---
             df_r = df_v_comp.copy()
             
-            # Nos aseguramos de quitar filas sin fecha antes de filtrar
-            df_r = df_r.dropna(subset=['fecha_solo_dia'])
+            # 1. Convertimos la columna 'fecha' a formato fecha real de Python
+            df_r['fecha_limpia'] = pd.to_datetime(df_r['fecha'], errors='coerce')
             
-            # FILTRO CRÍTICO: Comparación directa de fechas
-            df_r = df_r[(df_r['fecha_solo_dia'] >= f_ini) & (df_r['fecha_solo_dia'] <= f_fin)]
+            # 2. EL TRUCO: Extraemos solo la parte del día (sin horas, minutos ni segundos)
+            df_r['solo_el_dia'] = df_r['fecha_limpia'].dt.date
+            
+            # 3. Ahora filtramos: el día debe estar entre f_ini y f_fin
+            df_r = df_r[(df_r['solo_el_dia'] >= f_ini) & (df_r['solo_el_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
 
+            # --- SELECTOR DE PAGO ---
             filtro_pago = st.radio("Ver órdenes:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
             if "Pendientes" in filtro_pago:
@@ -293,20 +296,19 @@ if opcion == "Ventas":
 
             # --- MÉTRICAS Y TABLA ---
             st.divider()
-            col_m1, col_m2, col_m3 = st.columns(3)
-            col_m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
-            col_m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-            col_m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
+            m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
+            m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
             
             if not df_final.empty:
-                columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
-                # Ordenamos por la fecha original para que se vea el registro completo
+                # Usamos 'fecha_limpia' para que el orden sea exacto por hora (lo más nuevo arriba)
                 st.dataframe(
-                    df_final[columnas_ver].sort_values('fecha', ascending=False),
+                    df_final[['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']].sort_values('fecha_limpia', ascending=False),
                     use_container_width=True, hide_index=True
                 )
             else:
-                st.info(f"No hay registros entre el {f_ini} y el {f_fin}.")
+                st.info(f"No hay registros encontrados para el día {f_fin}.")
     
     # --- HISTORIAL FILTRADO ---
     st.divider()
