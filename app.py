@@ -259,34 +259,25 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
-       with tabs[2]: # 📊 REPORTES (ADMIN) - SOLUCIÓN DEFINITIVA
+        with tabs[2]: # 📊 REPORTES (ADMIN)
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
             c1, c2, c3 = st.columns(3)
             f_ini = c1.date_input("📅 Desde", datetime.now().replace(day=1))
             f_fin = c2.date_input("📅 Hasta", datetime.now())
-            
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
-            # --- PROCESAMIENTO DE DATOS ---
+            # --- FILTRADO ---
             df_r = df_v_comp.copy()
             
-            # Convertimos la fecha del Excel a formato real de Python
-            df_r['fecha_limpia'] = pd.to_datetime(df_r['fecha'], errors='coerce')
-            
-            # Creamos una columna que sea SOLO EL DÍA (sin hora) para comparar con el filtro
-            df_r['solo_dia'] = df_r['fecha_limpia'].dt.date
-            
-            # --- FILTRADO POR FECHA Y EMPLEADO ---
-            # Ahora comparamos día contra día (sin horas de por medio)
+            # Filtramos por el día (ignorando la hora de la casilla)
             df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
 
-            # --- SELECTOR DE PAGO ---
-            filtro_pago = st.radio("Ver órdenes:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
+            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
             if "Pendientes" in filtro_pago:
                 df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
@@ -302,18 +293,20 @@ if opcion == "Ventas":
             m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
             m3.metric("Cartera (Deben)", formato_pesos(df_final['saldo_n'].sum()))
             
-            # --- TABLA FINAL (SIN KEYERROR) ---
+            # --- TABLA FINAL ---
             if not df_final.empty:
-                # Usamos solo columnas que sabemos que existen en el Excel original
+                # Columnas que sí o sí existen en el Excel
                 columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
                 
-                # Ordenamos por 'fecha_limpia' para que lo más nuevo (por hora) salga arriba
+                # Ordenamos por fecha_dt (que creamos en leer_datos)
+                # Esto pone lo más nuevo de hoy arriba
                 st.dataframe(
-                    df_final[columnas_ver].sort_values('fecha_limpia', ascending=False),
+                    df_final[columnas_ver].sort_values('fecha_dt', ascending=False),
                     use_container_width=True, hide_index=True
                 )
             else:
-                st.info(f"No hay registros encontrados para el periodo seleccionado.")
+                st.info("No hay órdenes hoy con estos filtros.")
+                
     # --- HISTORIAL FILTRADO ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
