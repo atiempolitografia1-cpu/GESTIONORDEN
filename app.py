@@ -5,28 +5,21 @@ import requests
 import io
 
 # --- 1. CONFIGURACIÓN VISUAL ---
-st.set_page_config(
-    page_title="Gestión Negocio Pro", 
-    layout="centered", 
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;} 
-    footer {visibility: hidden;} 
-    header {visibility: hidden;}
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stDeployButton {display:none;}
     .block-container { padding-top: 2rem; padding-bottom: 2rem; }
     section[data-testid="stSidebar"] { top: 0; }
     </style>
     """, unsafe_allow_html=True)
 
-# ⚠️ TUS CREDENCIALES
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
 URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwefjYpHKmQNY6BY9-DXWAxk2GNN6VVeiVDxzr0xV-3Z7Ab9QLwkLulFK5d60rqQCVSSA/exec"
 
-# --- 2. FUNCIONES DE DATOS ---
+# --- 2. FUNCIONES ---
 def enviar_google(payload):
     try:
         res = requests.post(URL_SCRIPT, json=payload, timeout=15)
@@ -48,7 +41,7 @@ def leer_datos(pestana):
         return df
     except: return pd.DataFrame()
 
-# --- 3. LOGIN (CON ENTER) ---
+# --- 3. LOGIN ---
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 df_users_db = leer_datos("usuarios")
 
@@ -84,71 +77,53 @@ if opcion == "Ventas":
     with tabs[0]: # REGISTRAR
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
-        
         c1, c2, c3 = st.columns(3)
         with c1: v_ord = st.text_input("N° Orden", key="o"+vs)
         with c2: v_cli = st.text_input("Cliente", key="cl"+vs)
         with c3: v_nit = st.text_input("NIT / CC", key="ni"+vs)
-        
         c4, c5, c6 = st.columns(3)
         with c4: v_cel = st.text_input("Celular", key="ce"+vs)
         with c5: v_cor = st.text_input("Correo", key="co"+vs)
         with c6: v_fac = st.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
-        
         c7, c8 = st.columns(2)
         with c7: v_tot = st.number_input("Total ($)", min_value=0.0, key="t"+vs)
         with c8: v_abo = st.number_input("Abono Inicial ($)", min_value=0.0, key="a"+vs)
-        
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
-        
         c9, c10 = st.columns(2)
         with c9: v_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="es"+vs)
         with c10: v_pag = st.selectbox("Medio Pago Inicial", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="pa"+vs)
-        
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
-                payload = {
-                    "accion": "insertar", "tipo_registro": "ventas", 
-                    "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, 
-                    "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, 
-                    "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], 
-                    "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac,
-                    "historial_pagos": f"${v_abo:,.0f} ({v_pag}) el {datetime.now().date()}"
-                }
-                if enviar_google(payload): 
-                    st.session_state['limp_v'] += 1; st.success("¡Venta guardada!"); st.rerun()
+                payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) el {datetime.now().date()}"}
+                if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Venta guardada!"); st.rerun()
 
-    with tabs[1]: # EDITAR
+    with tabs[1]: # EDITAR / ABONAR
         if not df_v.empty:
             op_o = df_v['n_orden'].unique().tolist() if st.session_state['rol'] == 'admin' else df_v[df_v['empleado'].str.lower() == st.session_state['usuario'].lower()]['n_orden'].unique().tolist()
-            ord_s = st.selectbox("Seleccione Orden para editar:", ["Seleccionar..."] + op_o)
+            ord_s = st.selectbox("Seleccione Orden:", ["Seleccionar..."] + op_o)
             if ord_s != "Seleccionar...":
                 d = df_v[df_v['n_orden'] == str(ord_s)].iloc[0]
                 e1, e2, e3 = st.columns(3)
                 with e1: e_cli = st.text_input("Cliente", value=d['cliente'])
                 with e2: e_nit = st.text_input("NIT / CC", value=d['nit'])
                 with e3: e_cel = st.text_input("Celular", value=d['celular'])
-                
-                e_cor = st.text_input("Correo", value=d['correo'])
                 e_des = st.text_area("Descripción", value=d['descripcion'])
-                
-                e4, e5 = st.columns(2)
+                e4, e5, e6 = st.columns(3)
                 with e4: e_tot = st.number_input("Total ($)", value=float(pd.to_numeric(d['total'], errors='coerce') or 0.0))
-                with e5: n_abo = st.number_input("Nuevo abono hoy ($)", min_value=0.0)
-                
-                if st.button("💾 ACTUALIZAR TODO"):
+                with e5: st.info(f"Abonado: ${float(d['abono']):,.0f}"); n_abo = st.number_input("Nuevo abono ($)", min_value=0.0)
+                with e6: e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(d['estado']))
+                if st.button("💾 GUARDAR CAMBIOS"):
                     ab_f = float(d['abono']) + n_abo
-                    payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "descripcion": e_des, "total": e_tot, "abono": ab_f, "saldo": e_tot-ab_f}
+                    payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "cliente": e_cli, "nit": e_nit, "celular": e_cel, "descripcion": e_des, "total": e_tot, "abono": ab_f, "saldo": e_tot-ab_f, "estado": e_est}
                     if enviar_google(payload): st.success("¡Actualizado!"); st.rerun()
 
     if st.session_state['rol'] == 'admin':
         with tabs[2]: # REPORTES
-            st.subheader("📊 Reportes Avanzados")
+            st.subheader("📊 Filtros")
             df_v['fecha_dt'] = pd.to_datetime(df_v['fecha'], errors='coerce')
             f1, f2 = st.columns(2)
             with f1: sel_emp = st.selectbox("👤 Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
             with f2: modo_t = st.radio("📅 Tiempo:", ["Todo", "Día / Semana", "Mes / Año"], horizontal=True)
-            
             df_r = df_v.copy()
             if modo_t == "Día / Semana":
                 ran = st.date_input("Rango:", value=[datetime.now(), datetime.now()])
@@ -156,27 +131,50 @@ if opcion == "Ventas":
             elif modo_t == "Mes / Año":
                 m = st.selectbox("Mes:", range(1,13), index=datetime.now().month-1)
                 df_r = df_r[df_r['fecha_dt'].dt.month == m]
-            
             if sel_emp != "Todos": df_r = df_r[df_r['empleado'] == sel_emp]
-            st.metric("Total Cobrado", f"$ {pd.to_numeric(df_r['abono'], errors='coerce').sum():,.0f}")
+            st.metric("Total Cobrado en Filtro", f"$ {pd.to_numeric(df_r['abono'], errors='coerce').sum():,.0f}")
             st.dataframe(df_r.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
 
+    # --- HISTORIAL Y BUSCADOR (ABAJO) ---
+    st.divider()
+    st.subheader("📋 Historial de Órdenes")
+    busqueda = st.text_input("🔍 Buscar por Orden, Cliente o Descripción:")
+    df_h = df_v.copy()
+    if st.session_state['rol'] != 'admin':
+        df_h = df_h[df_h['empleado'].str.lower() == st.session_state['usuario'].lower()]
+    if busqueda:
+        df_h = df_h[df_h.apply(lambda row: busqueda.lower() in row.astype(str).str.lower().values, axis=1)]
+    st.dataframe(df_h.iloc[::-1], use_container_width=True, hide_index=True)
 
-   # ... (Sección de gestión de empleados igual que antes)
+# --- 6. GESTIÓN EMPLEADOS ---
 elif opcion == "Gestión de Empleados":
-    st.title("👥 Personal")
- 
+    st.title("👥 Gestión de Personal")
     df_u = leer_datos("usuarios")
-    t1, t2 = st.tabs(["➕ Nuevo", "⚙️ Editar"])
+    t1, t2 = st.tabs(["➕ Nuevo Empleado", "✏️ Modificar / Eliminar"])
+    
     with t1:
-        n_nom = st.text_input("Nombre Completo")
-        n_cla = st.text_input("Contraseña temporal")
-        if st.button("REGISTRAR EMPLEADO", use_container_width=True):
-            if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": "empleado"}):
-                st.success("Empleado creado"); st.rerun()
+        with st.form("nuevo_emp"):
+            n_nom = st.text_input("Nombre Completo")
+            n_cla = st.text_input("Contraseña")
+            n_rol = st.selectbox("Rol", ["empleado", "admin"])
+            if st.form_submit_button("Registrar en el Sistema"):
+                if n_nom and n_cla:
+                    if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
+                        st.success(f"¡{n_nom} registrado!"); st.rerun()
+    
     with t2:
         if not df_u.empty:
             u_sel = st.selectbox("Seleccione Usuario:", df_u['nombre'].tolist())
-            if u_sel != "Administrador" and st.button("ELIMINAR ACCESO", type="primary"):
-                if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
-                    st.warning("Usuario eliminado"); st.rerun()
+            datos_u = df_u[df_u['nombre'] == u_sel].iloc[0]
+            with st.form("edit_emp"):
+                e_cla = st.text_input("Nueva Contraseña", value=datos_u['clave'])
+                e_rol = st.selectbox("Rol", ["empleado", "admin"], index=0 if datos_u['rol'] == 'empleado' else 1)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.form_submit_button("ACTUALIZAR DATOS"):
+                        if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
+                            st.success("Datos actualizados"); st.rerun()
+                with col2:
+                    if u_sel != st.session_state['usuario'] and st.form_submit_button("⚠️ ELIMINAR ACCESO"):
+                        if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
+                            st.warning("Usuario eliminado"); st.rerun()
