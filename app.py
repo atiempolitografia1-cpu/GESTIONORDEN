@@ -118,18 +118,64 @@ if opcion == "Ventas":
                 payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
-    with tabs[1]: # EDITAR
-        if not df_v.empty:
-            ord_s = st.selectbox("Seleccione Orden:", ["Seleccionar..."] + df_v['n_orden'].tolist())
-            if ord_s != "Seleccionar...":
-                d = df_v[df_v['n_orden'] == ord_s].iloc[0]
-                st.warning(f"Saldo actual: {formato_pesos(d['saldo_n'])}")
-                n_abo = st.number_input("Nuevo abono ($ COP)", min_value=0.0, step=1000.0, format="%.0f")
-                e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=0)
-                if st.button("💾 ACTUALIZAR"):
-                    ab_f = d['abono_n'] + n_abo
-                    payload = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_s, "abono": ab_f, "saldo": d['total_n'] - ab_f, "estado": e_est}
-                    if enviar_google(payload): st.success("¡Actualizado!"); st.rerun()
+    with tabs[1]: # EDITAR ORDEN COMPLETO
+    st.subheader("Modificar Orden Existente")
+    if not df_v.empty:
+        orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
+        
+        if orden_buscada != "Seleccionar...":
+            # Extraer datos actuales de la fila seleccionada
+            idx = df_v[df_v['n_orden'] == orden_buscada].index[0]
+            val = df_v.loc[idx]
+            
+            with st.form("form_edit"):
+                st.info(f"Editando Orden: {orden_buscada} | Registrada por: {val['empleado']}")
+                col1, col2 = st.columns(2)
+                e_cli = col1.text_input("Cliente", value=val['cliente'])
+                e_nit = col2.text_input("NIT / CC", value=val['nit'])
+                
+                col3, col4, col5 = st.columns(3)
+                e_cel = col3.text_input("Celular", value=val['celular'])
+                e_cor = col4.text_input("Correo", value=val['correo'])
+                e_fac = col5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura'] == "SÍ" else 1)
+                
+                e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
+                
+                col6, col7 = st.columns(2)
+                e_tot = col6.number_input("Total ($ COP)", value=float(val['total_n']), step=1000.0, format="%.0f")
+                st.markdown(f"**Saldo actual:** {formato_pesos(val['saldo_n'])}")
+                e_nuevo_abo = col7.number_input("Añadir nuevo abono ($ COP)", min_value=0.0, step=1000.0, format="%.0f", help="Este valor se sumará al abono anterior")
+                
+                col8, col9 = st.columns(2)
+                e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
+                e_pag = col9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+
+                if st.form_submit_button("💾 ACTUALIZAR TODA LA ORDEN"):
+                    abono_final = val['abono_n'] + e_nuevo_abo
+                    historial_act = val['historial_pagos']
+                    if e_nuevo_abo > 0:
+                        historial_act += f" | +${e_nuevo_abo:,.0f} ({e_pag}) {datetime.now().date()}"
+                    
+                    payload = {
+                        "accion": "actualizar",
+                        "tipo_registro": "ventas",
+                        "id_busqueda": orden_buscada,
+                        "cliente": e_cli,
+                        "nit": e_nit,
+                        "celular": e_cel,
+                        "correo": e_cor,
+                        "factura": e_fac,
+                        "descripcion": e_desc,
+                        "total": e_tot,
+                        "abono": abono_final,
+                        "saldo": e_tot - abono_final,
+                        "estado": e_est,
+                        "historial_pagos": historial_act
+                    }
+                    if enviar_google(payload):
+                        st.success("✅ Orden actualizada correctamente"); st.rerun()
+    else:
+        st.warning("No hay órdenes para editar.")
 
     if st.session_state['rol'] == 'admin':
         with tabs[2]: # REPORTES CON FORMATO
