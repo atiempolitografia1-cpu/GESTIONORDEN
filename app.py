@@ -130,37 +130,26 @@ if opcion == "Ventas":
                     if enviar_google(payload): st.success("¡Actualizado!"); st.rerun()
 
     if st.session_state['rol'] == 'admin':
-       with tabs[2]: # REPORTES (MEJORADOS)
-            st.subheader("📊 Análisis de Cartera y Ventas")
-            df_v['fecha_dt'] = pd.to_datetime(df_v['fecha'], errors='coerce')
-            
+      with tabs[2]: # REPORTES FILTRADOS
+            st.subheader("📊 Análisis de Cartera")
             c_f1, c_f2 = st.columns(2)
-            with c_f1: sel_emp = st.selectbox("👤 Filtrar por Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
-            with c_f2: tipo_pago = st.radio("💰 Estado de Pago:", ["Todas", "Solo Pendientes (Deben)", "Solo Pagadas"], horizontal=True)
+            with c_f1: sel_emp = st.selectbox("👤 Empleado:", ["Todos"] + df_v['empleado'].unique().tolist())
+            with c_f2: tipo_pago = st.radio("💰 Filtro de Cobro:", ["Todas", "Solo Pendientes", "Solo Pagadas"], horizontal=True)
             
             df_r = df_v.copy()
-            
-            # Filtro por pago
-            if tipo_pago == "Solo Pendientes (Deben)":
-                df_r = df_r[df_r['saldo'] > 0]
-            elif tipo_pago == "Solo Pagadas":
-                df_r = df_r[df_r['saldo'] <= 0]
-            
-            # Filtro por empleado
-            if sel_emp != "Todos":
-                df_r = df_r[df_r['empleado'] == sel_emp]
+            if tipo_pago == "Solo Pendientes": df_r = df_r[df_r['saldo_n'] > 100] # Margen de 100 pesos por si acaso
+            elif tipo_pago == "Solo Pagadas": df_r = df_r[df_r['saldo_n'] <= 100]
+            if sel_emp != "Todos": df_r = df_r[df_r['empleado'] == sel_emp]
             
             st.divider()
             m1, m2, m3 = st.columns(3)
-            total_v = df_r['total'].sum()
-            total_c = df_r['abono'].sum()
-            total_d = df_r['saldo'].sum()
+            m1.metric("Ventas Totales", f"$ {df_r['total_n'].sum():,.0f}")
+            m2.metric("Total Cobrado", f"$ {df_r['abono_n'].sum():,.0f}")
+            m3.metric("Por Cobrar", f"$ {df_r['saldo_n'].sum():,.0f}", delta_color="inverse")
             
-            m1.metric("Valor Total Órdenes", f"$ {total_v:,.0f}")
-            m2.metric("Total Cobrado", f"$ {total_c:,.0f}", delta_color="normal")
-            m3.metric("Por Cobrar (Saldo)", f"$ {total_d:,.0f}", delta=f"-{total_d:,.0f}", delta_color="inverse")
-            
-            st.dataframe(df_r.drop(columns=['fecha_dt']), use_container_width=True, hide_index=True)
+            # Mostrar tabla sin las columnas auxiliares de limpieza
+            st.dataframe(df_r.drop(columns=['total_n', 'abono_n', 'saldo_n']), use_container_width=True, hide_index=True)
+          
     # --- HISTORIAL Y BUSCADOR (ABAJO) ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
