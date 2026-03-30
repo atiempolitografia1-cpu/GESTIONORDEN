@@ -266,23 +266,17 @@ if opcion == "Ventas":
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
             # --- FILTRADO ---
-            df_r = df_v_comp.copy()
+            # --- LÓGICA DE FILTRADO CORREGIDA ---
+            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
-            # Filtramos usando la columna estable que creamos en leer_datos
-            if not df_r.empty:
-                df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
-                
-                if e_sel != "TODOS":
-                    df_r = df_r[df_r['empleado'] == e_sel]
-
-                filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
-                
-                if "Pendientes" in filtro_pago:
-                    df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
-                elif "Canceladas" in filtro_pago:
-                    df_final = df_r[(df_r['estado'] == "PAGADO") | (df_r['saldo_n'] <= 0)]
-                else:
-                    df_final = df_r.copy()
+            if "Pendientes" in filtro_pago:
+                # Pendientes: Que el saldo sea mayor a 0 (aunque diga Pagado por error)
+                df_final = df_r[df_r['saldo_n'] > 0]
+            elif "Canceladas" in filtro_pago:
+                # Canceladas: El saldo TIENE que ser 0
+                df_final = df_r[df_r['saldo_n'] <= 0]
+            else:
+                df_final = df_r.copy()
 
                 # --- MÉTRICAS ---
                 st.divider()
