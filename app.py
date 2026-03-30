@@ -266,36 +266,33 @@ if opcion == "Ventas":
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
             # --- FILTRADO ---
-            # --- LÓGICA DE FILTRADO CORREGIDA ---
-            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
-            
+           # --- LÓGICA DE FILTRADO CORREGIDA ---
             if "Pendientes" in filtro_pago:
-                # Pendientes: Que el saldo sea mayor a 0 (aunque diga Pagado por error)
+                # Muestra solo lo que tenga deuda real
                 df_final = df_r[df_r['saldo_n'] > 0]
             elif "Canceladas" in filtro_pago:
-                # Canceladas: El saldo TIENE que ser 0
+                # Muestra solo lo que esté en $0
                 df_final = df_r[df_r['saldo_n'] <= 0]
             else:
                 df_final = df_r.copy()
 
-                # --- MÉTRICAS ---
-                st.divider()
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
-                m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-                m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
-                
-                # --- TABLA SIN HORA EN EL FILTRO ---
-                if not df_final.empty:
-                    # Ordenamos por la fecha original para ver la hora real
-                    st.dataframe(
-                        df_final[['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']].sort_values('fecha', ascending=False),
-                        use_container_width=True, hide_index=True
-                    )
-                else:
-                    st.info("No hay órdenes para este día.")
+            # --- MÉTRICAS ---
+            st.divider()
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
+            m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
+            m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+            
+            # --- TABLA FINAL ---
+            if not df_final.empty:
+                # Ordenamos para que lo más reciente salga primero
+                columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+                st.dataframe(
+                    df_final[columnas_ver].sort_values('fecha', ascending=False),
+                    use_container_width=True, hide_index=True
+                )
             else:
-                st.warning("No se pudieron cargar los datos del Excel.")
+                st.info("No hay órdenes con estos filtros en este rango de fechas.")
                 
                 
     # --- HISTORIAL FILTRADO ---
