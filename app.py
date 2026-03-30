@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 import requests
 import io
-import re
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
@@ -40,10 +39,8 @@ def formato_pesos(valor):
         return "$ 0"
 
 def a_numero(valor):
-    """Limpia el texto para convertirlo en número real funcional"""
     try:
         if valor is None or str(valor).strip() == "": return 0.0
-        # Eliminamos símbolos y corregimos puntuación para que Python entienda el número
         s = str(valor).replace("$", "").replace(".", "").replace(" ", "").replace(",", ".")
         return float(s) if s else 0.0
     except:
@@ -70,14 +67,8 @@ def leer_datos(pestana):
 def enviar_google(payload):
     try:
         res = requests.post(URL_SCRIPT, json=payload, timeout=15)
-        if res.status_code == 200:
-            return True
-        else:
-            st.error(f"Error de conexión con Excel (Código: {res.status_code})")
-            return False
-    except Exception as e:
-        st.error(f"Error crítico: {e}")
-        return False
+        return res.status_code == 200
+    except: return False
 
 # --- 3. LOGIN ---
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
@@ -109,173 +100,102 @@ with st.sidebar:
 if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v_completo = leer_datos("ventas")
+    df_v = df_v_completo.copy() if st.session_state['rol'] == 'admin' else df_v_completo[df_v_completo['empleado'] == st.session_state['usuario']].copy()
     
+    # Manejo dinámico de pestañas según el ROL
     if st.session_state['rol'] == 'admin':
-        df_v = df_v_completo.copy()
+        tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"])
     else:
-        df_v = df_v_completo[df_v_completo['empleado'] == st.session_state['usuario']].copy()
-    
-    tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"]) if st.session_state['rol'] == 'admin' else st.tabs(["📝 Registrar", "✏️ Editar / Abonar"])
+        tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar"])
 
     with tabs[0]: # REGISTRAR
         if 'limp_v' not in st.session_state: st.session_state['limp_v'] = 0
         vs = str(st.session_state['limp_v'])
         c1, c2, c3 = st.columns(3)
-        v_ord = c1.text_input("N° Orden", key="o"+vs)
-        v_cli = c2.text_input("Cliente", key="cl"+vs)
-        v_nit = c3.text_input("NIT / CC", key="ni"+vs)
-        
+        v_ord, v_cli, v_nit = c1.text_input("N° Orden", key="o"+vs), c2.text_input("Cliente", key="cl"+vs), c3.text_input("NIT / CC", key="ni"+vs)
         c4, c5, c6 = st.columns(3)
-        v_cel = c4.text_input("Celular", key="ce"+vs)
-        v_cor = c5.text_input("Correo", key="co"+vs)
-        v_fac = c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
-        
+        v_cel, v_cor, v_fac = c4.text_input("Celular", key="ce"+vs), c5.text_input("Correo", key="co"+vs), c6.radio("Factura", ["SÍ", "NO"], horizontal=True, key="fa"+vs)
         c7, c8 = st.columns(2)
-        v_tot_raw = c7.text_input("Total ($ COP)", value="0", key="tr"+vs)
-        v_tot = a_numero(v_tot_raw)
+        v_tot = a_numero(c7.text_input("Total ($ COP)", value="0", key="tr"+vs))
         c7.markdown(f'<div class="money-helper">{formato_pesos(v_tot)}</div>', unsafe_allow_html=True)
-        
-        v_abo_raw = c8.text_input("Abono Inicial ($ COP)", value="0", key="ar"+vs)
-        v_abo = a_numero(v_abo_raw)
+        v_abo = a_numero(c8.text_input("Abono Inicial ($ COP)", value="0", key="ar"+vs))
         c8.markdown(f'<div class="money-helper">{formato_pesos(v_abo)}</div>', unsafe_allow_html=True)
-        
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
         c9, c10 = st.columns(2)
-        v_est = c9.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="es"+vs)
-        v_pag = c10.selectbox("Medio Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="pa"+vs)
-        
+        v_est, v_pag = c9.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="es"+vs), c10.selectbox("Medio Pago", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"], key="pa"+vs)
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if v_ord and v_cli:
-                payload = {
-                    "accion": "insertar", "tipo_registro": "ventas", 
-                    "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), 
-                    "n_orden": str(v_ord), "descripcion": str(v_desc), 
-                    "total": float(v_tot), "abono": float(v_abo), 
-                    "saldo": float(v_tot-v_abo), "metodo_pago": str(v_pag), 
-                    "estado": str(v_est), "empleado": st.session_state['usuario'], 
-                    "cliente": str(v_cli), "nit": str(v_nit), "celular": str(v_cel), 
-                    "correo": str(v_cor), "factura": str(v_fac), 
-                    "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"
-                }
-                if enviar_google(payload): 
+                p = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": str(v_ord), "descripcion": str(v_desc), "total": float(v_tot), "abono": float(v_abo), "saldo": float(v_tot-v_abo), "metodo_pago": str(v_pag), "estado": str(v_est), "empleado": st.session_state['usuario'], "cliente": str(v_cli), "nit": str(v_nit), "celular": str(v_cel), "correo": str(v_cor), "factura": str(v_fac), "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
+                if enviar_google(p): 
                     st.session_state['limp_v'] += 1
-                    st.success("✅ Venta registrada")
-                    st.rerun()
+                    st.success("✅ Registrado"); st.rerun()
 
-    with tabs[1]: # EDITAR / ABONAR (COMPLETO)
-        st.subheader("Modificar Orden Existente")
+    with tabs[1]: # EDITAR / ABONAR
         if not df_v.empty:
-            orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
-            
-            if orden_buscada != "Seleccionar...":
-                idx = df_v[df_v['n_orden'] == orden_buscada].index[0]
-                val = df_v.loc[idx]
-                
+            ord_ed = st.selectbox("Seleccione Orden:", ["Seleccionar..."] + df_v['n_orden'].tolist())
+            if ord_ed != "Seleccionar...":
+                val = df_v[df_v['n_orden'] == ord_ed].iloc[0]
                 with st.form("form_edit"):
-                    st.info(f"Editando Orden: {orden_buscada} | Registrada por: {val['empleado']}")
-                    col1, col2 = st.columns(2)
-                    e_cli = col1.text_input("Cliente", value=val['cliente'])
-                    e_nit = col2.text_input("NIT / CC", value=val['nit'])
-                    
-                    col3, col4, col5 = st.columns(3)
-                    e_cel = col3.text_input("Celular", value=val['celular'])
-                    e_cor = col4.text_input("Correo", value=val['correo'])
-                    e_fac = col5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura'] == "SÍ" else 1)
-                    
-                    e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
-                    
-                    col6, col7 = st.columns(2)
-                    e_tot = a_numero(col6.text_input("Total ($ COP)", value=str(int(val['total_n']))))
-                    col6.markdown(f'<div class="money-helper">{formato_pesos(e_tot)}</div>', unsafe_allow_html=True)
-                    
-                    e_nuevo_abo = a_numero(col7.text_input("Añadir nuevo abono ($ COP)", value="0"))
-                    col7.markdown(f'<div class="money-helper">Abonar ahora: {formato_pesos(e_nuevo_abo)}</div>', unsafe_allow_html=True)
-                    
-                    abono_acumulado = val['abono_n'] + e_nuevo_abo
-                    saldo_final = e_tot - abono_acumulado
-                    st.warning(f"Saldo Previo: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(saldo_final)}**")
-                    
-                    col8, col9 = st.columns(2)
-                    e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
-                    e_pag = col9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+                    c1, c2 = st.columns(2)
+                    e_cli, e_nit = c1.text_input("Cliente", value=val['cliente']), c2.text_input("NIT / CC", value=val['nit'])
+                    c3, c4, c5 = st.columns(3)
+                    e_cel, e_cor, e_fac = c3.text_input("Celular", value=val['celular']), c4.text_input("Correo", value=val['correo']), c5.selectbox("Factura", ["SÍ", "NO"], index=0 if val['factura']=="SÍ" else 1)
+                    e_desc = st.text_area("Descripción", value=val['descripcion'])
+                    c6, c7 = st.columns(2)
+                    e_tot = a_numero(c6.text_input("Total", value=str(int(val['total_n']))))
+                    e_n_abo = a_numero(c7.text_input("Nuevo Abono", value="0"))
+                    c8, c9 = st.columns(2)
+                    e_est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
+                    e_pag = c9.selectbox("Medio Abono", ["EFECTIVO", "NEQUI", "DAVIPLATA", "BANCOLOMBIA"])
+                    if st.form_submit_button("💾 ACTUALIZAR EXCEL"):
+                        ab_ac = val['abono_n'] + e_n_abo
+                        h = val['historial_pagos'] + (f" | +${e_n_abo:,.0f} ({e_pag}) {datetime.now().date()}" if e_n_abo > 0 else "")
+                        p = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": ord_ed, "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac, "descripcion": e_desc, "total": float(e_tot), "abono": float(ab_ac), "saldo": float(e_tot-ab_ac), "estado": e_est, "historial_pagos": h}
+                        if enviar_google(p): st.success("✅ Actualizado"); st.rerun()
 
-                    if st.form_submit_button("💾 ACTUALIZAR EN EXCEL"):
-                        hist_act = val['historial_pagos']
-                        if e_nuevo_abo > 0:
-                            hist_act += f" | +${e_nuevo_abo:,.0f} ({e_pag}) {datetime.now().date()}"
-                        
-                        payload = {
-                            "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": orden_buscada,
-                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
-                            "descripcion": e_desc, "total": float(e_tot), "abono": float(abono_acumulado),
-                            "saldo": float(saldo_final), "estado": e_est, "historial_pagos": hist_act
-                        }
-                        if enviar_google(payload): 
-                            st.success("✅ Orden actualizada en Excel")
-                            st.rerun()
+    # SOLO PARA ADMINS: REPORTE AVANZADO
+    if st.session_state['rol'] == 'admin':
+        with tabs[2]:
+            st.subheader("📊 Filtros de Reporte")
+            c1, c2, c3 = st.columns(3)
+            f_ini = c1.date_input("Desde", datetime.now().replace(day=1))
+            f_fin = c2.date_input("Hasta", datetime.now())
+            f_emp = c3.selectbox("Empleado", ["TODOS"] + df_v_completo['empleado'].unique().tolist())
+            
+            df_r = df_v_completo.copy()
+            df_r['fecha_dt'] = pd.to_datetime(df_r['fecha']).dt.date
+            df_r = df_r[(df_r['fecha_dt'] >= f_ini) & (df_r['fecha_dt'] <= f_fin)]
+            if f_emp != "TODOS": df_r = df_r[df_r['empleado'] == f_emp]
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Ventas Totales", formato_pesos(df_r['total_n'].sum()))
+            m2.metric("Recaudado (Abonos)", formato_pesos(df_r['abono_n'].sum()))
+            m3.metric("Por Cobrar (Saldos)", formato_pesos(df_r['saldo_n'].sum()))
+            st.dataframe(df_r.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
 
-
-        with tabs[2]: # REPORTES AVANZADOS (RESTAURADO)
-        st.subheader("📊 Filtros de Reporte")
-        c1, c2, c3 = st.columns(3)
-        f_ini = c1.date_input("Desde", datetime.now().replace(day=1))
-        f_fin = c2.date_input("Hasta", datetime.now())
-        f_emp = c3.selectbox("Empleado", ["TODOS"] + df_v_completo['empleado'].unique().tolist())
-        
-        df_r = df_v_completo.copy()
-        df_r['fecha_dt'] = pd.to_datetime(df_r['fecha']).dt.date
-        df_r = df_r[(df_r['fecha_dt'] >= f_ini) & (df_r['fecha_dt'] <= f_fin)]
-        if f_emp != "TODOS": df_r = df_r[df_r['empleado'] == f_emp]
-        
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Ventas Totales", formato_pesos(df_r['total_n'].sum()))
-        m2.metric("Recaudado (Abonos)", formato_pesos(df_r['abono_n'].sum()))
-        m3.metric("Por Cobrar (Saldos)", formato_pesos(df_r['saldo_n'].sum()))
-        st.dataframe(df_r.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
-
-    
-    # --- HISTORIAL ---
+    # --- HISTORIAL RÁPIDO ---
     st.divider()
-    st.subheader("📋 Historial")
-    busqueda = st.text_input("🔍 Buscar orden, cliente o descripción:")
+    st.subheader("📋 Historial Reciente")
+    busq = st.text_input("🔍 Buscar orden o cliente:")
     df_h = df_v.copy()
-    if busqueda:
-        mask = (df_h['n_orden'].astype(str).str.contains(busqueda, case=False) |
-                df_h['cliente'].astype(str).str.contains(busqueda, case=False) |
-                df_h['descripcion'].astype(str).str.contains(busqueda, case=False))
-        df_h = df_h[mask]
-    
-    df_h['total'] = df_h['total_n'].apply(formato_pesos)
-    df_h['abono'] = df_h['abono_n'].apply(formato_pesos)
-    df_h['saldo'] = df_h['saldo_n'].apply(formato_pesos)
+    if busq: df_h = df_h[df_h['n_orden'].str.contains(busq, case=False) | df_h['cliente'].str.contains(busq, case=False)]
+    df_h['total'], df_h['abono'], df_h['saldo'] = df_h['total_n'].apply(formato_pesos), df_h['abono_n'].apply(formato_pesos), df_h['saldo_n'].apply(formato_pesos)
     st.dataframe(df_h.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore').iloc[::-1], use_container_width=True, hide_index=True)
 
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
     df_u = leer_datos("usuarios")
-    t1, t2 = st.tabs(["➕ Nuevo Empleado", "✏️ Modificar / Eliminar"])
-    
+    t1, t2 = st.tabs(["➕ Nuevo", "✏️ Editar"])
     with t1:
-        with st.form("nuevo_emp"):
-            n_nom = st.text_input("Nombre Completo")
-            n_cla = st.text_input("Contraseña")
-            n_rol = st.selectbox("Rol", ["empleado", "admin"])
-            if st.form_submit_button("Registrar en el Sistema"):
-                if n_nom and n_cla:
-                    if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
-                        st.success(f"¡{n_nom} registrado!"); st.rerun()
-    
+        with st.form("n_u"):
+            n, c, r = st.text_input("Nombre"), st.text_input("Clave"), st.selectbox("Rol", ["empleado", "admin"])
+            if st.form_submit_button("Registrar"):
+                if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n, "clave": c, "rol": r}): st.success("Ok"); st.rerun()
     with t2:
         if not df_u.empty:
-            u_sel = st.selectbox("Seleccione Usuario:", df_u['nombre'].tolist())
-            datos_u = df_u[df_u['nombre'] == u_sel].iloc[0]
-            with st.form("edit_emp"):
-                e_cla = st.text_input("Nueva Contraseña", value=datos_u['clave'])
-                e_rol = st.selectbox("Rol", ["empleado", "admin"], index=0 if datos_u['rol'] == 'empleado' else 1)
-                c1, c2 = st.columns(2)
-                if c1.form_submit_button("ACTUALIZAR DATOS"):
-                    if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
-                        st.success("Datos actualizados"); st.rerun()
-                if u_sel != st.session_state['usuario'] and c2.form_submit_button("⚠️ ELIMINAR ACCESO"):
-                    if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
-                        st.warning("Usuario eliminado"); st.rerun()
+            u_s = st.selectbox("Usuario:", df_u['nombre'].tolist())
+            dat = df_u[df_u['nombre'] == u_s].iloc[0]
+            with st.form("e_u"):
+                ec, er = st.text_input("Clave", value=dat['clave']), st.selectbox("Rol", ["empleado", "admin"], index=0 if dat['rol']=='empleado' else 1)
+                if st.form_submit_button("Actualizar"):
+                    if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_s, "clave": ec, "rol": er}): st.success("Ok"); st.rerun()
