@@ -247,67 +247,49 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # 📊 REPORTES DE AUDITORÍA Y CONTROL (ADMIN)
+        with tabs[2]: # 📊 REPORTES (ADMIN)
             st.subheader("🧐 Auditoría de Ventas y Cartera")
             
-            # --- FILTROS SUPERIORES ---
             c_f1, c_f2, c_f3 = st.columns(3)
-            f_ini = c_f1.date_input("📅 Desde", datetime.now().replace(day=1), key="rep_f_ini")
-            f_fin = c_f2.date_input("📅 Hasta", datetime.now(), key="rep_f_fin")
+            f_ini = c_f1.date_input("📅 Desde", datetime.now().replace(day=1))
+            f_fin = c_f2.date_input("📅 Hasta", datetime.now())
             
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
-            e_sel = c_f3.selectbox("👤 Empleado", lista_emp, key="rep_emp")
+            e_sel = c_f3.selectbox("👤 Empleado", lista_emp)
             
-            # --- LÓGICA DE FILTRADO MAESTRA (CORREGIDA PARA HOY) ---
+            # --- FILTRADO ---
             df_r = df_v_comp.copy()
-            
-            # Convertimos con errors='coerce' para que no salga el cuadro rojo si hay basura en el Excel
-            df_r['fecha_temp'] = pd.to_datetime(df_r['fecha'], errors='coerce')
-            
-            # Extraemos solo la fecha (sin hora) para comparar con los calendarios de Streamlit
-            df_r['fecha_solo_dia'] = df_r['fecha_temp'].dt.date
-            
-            # Filtramos por el rango de fechas seleccionado
+            # Filtramos usando la columna que creamos en leer_datos
             df_r = df_r[(df_r['fecha_solo_dia'] >= f_ini) & (df_r['fecha_solo_dia'] <= f_fin)]
             
             if e_sel != "TODOS":
                 df_r = df_r[df_r['empleado'] == e_sel]
 
-            # --- FILTRO DE ESTADO DE CUENTA ---
-            filtro_pago = st.radio("Filtrar por pago:", ["📑 Todo", "💸 Solo Pendientes (Deben)", "✅ Solo Canceladas"], horizontal=True)
+            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
-            if "Solo Pendientes" in filtro_pago:
+            if "Pendientes" in filtro_pago:
                 df_final = df_r[(df_r['saldo_n'] > 0) & (df_r['estado'] != "PAGADO")]
-                st.caption(f"🔍 Mostrando deudas de {e_sel}")
-            elif "Solo Canceladas" in filtro_pago:
+            elif "Canceladas" in filtro_pago:
                 df_final = df_r[(df_r['estado'] == "PAGADO") | (df_r['saldo_n'] <= 0)]
-                st.caption(f"🔍 Mostrando lo pagado de {e_sel}")
             else:
                 df_final = df_r.copy()
-                st.caption(f"🔍 Mostrando todos los registros de {e_sel}")
 
-            # --- MÉTRICAS DINÁMICAS ---
+            # --- TABLA Y MÉTRICAS ---
             st.divider()
-            v_total = df_final['total_n'].sum()
-            a_total = df_final['abono_n'].sum()
-            s_total = df_final['saldo_n'].sum()
-            
             m1, m2, m3 = st.columns(3)
-            m1.metric("Valor Total", formato_pesos(v_total))
-            m2.metric("Recaudado", formato_pesos(a_total))
-            m3.metric("Cartera (Deben)", formato_pesos(s_total))
+            m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
+            m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
+            m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
             
-            # --- TABLA FINAL ---
             if not df_final.empty:
-                # Mostramos las columnas importantes, incluyendo el empleado para el Admin
+                # ORDENAMOS POR fecha_dt QUE YA EXISTE EN EL DF
                 columnas = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
                 st.dataframe(
-                    df_final[columnas].sort_values('fecha_temp', ascending=False),
-                    use_container_width=True,
-                    hide_index=True
+                    df_final[columnas].sort_values('fecha_dt', ascending=False),
+                    use_container_width=True, hide_index=True
                 )
             else:
-                st.info("No hay datos para mostrar con estos filtros. Prueba ampliando las fechas.")
+                st.info("No hay datos hoy con estos filtros.")
     
     # --- HISTORIAL FILTRADO ---
     st.divider()
