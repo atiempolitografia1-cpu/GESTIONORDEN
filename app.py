@@ -62,10 +62,13 @@ def leer_datos(pestana):
             cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
             df = df.iloc[:, :len(cols)]
             df.columns = cols
+            # --- PROCESAMIENTO CRÍTICO DE DATOS ---
             df['total_n'] = df['total'].apply(a_numero)
             df['abono_n'] = df['abono'].apply(a_numero)
             df['saldo_n'] = df['total_n'] - df['abono_n']
+            # Convertimos la fecha una sola vez para todo el sistema
             df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            df['fecha_solo_dia'] = df['fecha_dt'].dt.date
         return df
     except: return pd.DataFrame()
 
