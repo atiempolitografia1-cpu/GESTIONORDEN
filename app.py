@@ -118,7 +118,7 @@ if opcion == "Ventas":
     if st.session_state['rol'] == 'admin': t_labels.append("📊 Reportes Avanzados")
     tabs = st.tabs(t_labels)
 
-   with tabs[0]: # 📝 REGISTRAR (BLOQUE COMPLETO)
+    with tabs[0]: # 📝 REGISTRAR (BLOQUE COMPLETO)
         if 'limp' not in st.session_state: st.session_state['limp'] = 0
         v = str(st.session_state['limp'])
         
