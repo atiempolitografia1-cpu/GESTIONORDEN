@@ -104,14 +104,11 @@ with st.sidebar:
 if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     
-    # --- FILTRO DE PRIVACIDAD ---
-    # Cargamos todos los datos, pero filtramos según el rol del usuario logueado
     df_v_completo = leer_datos("ventas")
     
     if st.session_state['rol'] == 'admin':
         df_v = df_v_completo.copy()
     else:
-        # El empleado solo ve las filas donde la columna 'empleado' coincide con su nombre de login
         df_v = df_v_completo[df_v_completo['empleado'] == st.session_state['usuario']].copy()
     
     tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"]) if st.session_state['rol'] == 'admin' else st.tabs(["📝 Registrar", "✏️ Editar / Abonar"])
@@ -147,10 +144,9 @@ if opcion == "Ventas":
                 payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
-    with tabs[1]: # EDITAR ORDEN (Solo verá sus propias órdenes en el selectbox)
+    with tabs[1]: # EDITAR ORDEN
         st.subheader("Modificar Orden Existente")
         if not df_v.empty:
-            # Aquí el selectbox solo muestra las órdenes filtradas previamente
             orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
             
             if orden_buscada != "Seleccionar...":
@@ -236,14 +232,35 @@ if opcion == "Ventas":
             df_m['saldo'] = df_m['saldo_n'].apply(formato_pesos)
             st.dataframe(df_m.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore'), use_container_width=True, hide_index=True)
 
-    # --- HISTORIAL GENERAL (Filtrado por Usuario) ---
+    # --- HISTORIAL GENERAL CON BUSCADOR ---
     st.divider()
     st.subheader("📋 Mi Historial" if st.session_state['rol'] != 'admin' else "📋 Historial General")
-    df_h = df_v.copy() # df_v ya viene filtrado desde arriba
+    
+    # BUSCADOR DINÁMICO
+    busqueda = st.text_input("🔍 Buscar orden (N°, Cliente o Descripción):", placeholder="Ej: 105 o Juan Perez...")
+    
+    df_h = df_v.copy()
+    
+    # Aplicar filtro de búsqueda si el usuario escribe algo
+    if busqueda:
+        # Filtramos en las columnas n_orden, cliente y descripcion
+        mask = (
+            df_h['n_orden'].astype(str).str.contains(busqueda, case=False, na=False) |
+            df_h['cliente'].astype(str).str.contains(busqueda, case=False, na=False) |
+            df_h['descripcion'].astype(str).str.contains(busqueda, case=False, na=False)
+        )
+        df_h = df_h[mask]
+    
+    # Formatear para visualización
     df_h['total'] = df_h['total_n'].apply(formato_pesos)
     df_h['abono'] = df_h['abono_n'].apply(formato_pesos)
     df_h['saldo'] = df_h['saldo_n'].apply(formato_pesos)
-    st.dataframe(df_h.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore').iloc[::-1], use_container_width=True, hide_index=True)
+    
+    st.dataframe(
+        df_h.drop(columns=['total_n','abono_n','saldo_n','fecha_dt'], errors='ignore').iloc[::-1], 
+        use_container_width=True, 
+        hide_index=True
+    )
 
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
