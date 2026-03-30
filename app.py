@@ -247,18 +247,71 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # REPORTES (PARA ADMIN)
-            st.subheader("📊 Reporte Mensual")
-            c1, c2 = st.columns(2)
-            f_i, f_f = c1.date_input("Desde", datetime.now().replace(day=1)), c2.date_input("Hasta", datetime.now())
-            df_r = df_v_comp.copy()
-            df_r = df_r[df_r['fecha_dt'].notna()]
-            df_r = df_r[(df_r['fecha_dt'].dt.date >= f_i) & (df_r['fecha_dt'].dt.date <= f_f)]
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Ventas", formato_pesos(df_r['total_n'].sum()))
-            m2.metric("Recaudado", formato_pesos(df_r['abono_n'].sum()))
-            m3.metric("Saldos", formato_pesos(df_r['saldo_n'].sum()))
-            st.dataframe(df_r[['fecha','n_orden','cliente','total','abono','saldo','estado','empleado']], use_container_width=True, hide_index=True)
+        with tabs[2]: # 📊 REPORTES AVANZADOS (PARA ADMIN)
+            st.subheader("📁 Centro de Reportes y Control")
+            
+            # --- FILTROS DE BÚSQUEDA ---
+            col_f1, col_f2, col_f3 = st.columns(3)
+            f_inicio = col_f1.date_input("Fecha Inicio", datetime.now().replace(day=1))
+            f_fin = col_f2.date_input("Fecha Fin", datetime.now())
+            
+            # Lista de empleados para filtrar + opción "TODOS"
+            lista_empleados = ["TODOS"] + df_users_db['nombre'].tolist()
+            emp_sel = col_f3.selectbox("Filtrar por Empleado", lista_empleados)
+            
+            # --- LÓGICA DE FILTRADO ---
+            df_rep = df_v_comp.copy()
+            
+            # 1. Filtrar por Fechas (limpiando datos erróneos)
+            df_rep = df_rep[df_rep['fecha_dt'].notna()]
+            df_rep = df_rep[(df_rep['fecha_dt'].dt.date >= f_inicio) & (df_rep['fecha_dt'].dt.date <= f_fin)]
+            
+            # 2. Filtrar por Empleado
+            if emp_sel != "TODOS":
+                df_rep = df_rep[df_rep['empleado'] == emp_sel]
+            
+            # --- MÉTRICAS ---
+            st.divider()
+            m1, m2, m3, m4 = st.columns(4)
+            total_v = df_rep['total_n'].sum()
+            total_a = df_rep['abono_n'].sum()
+            total_s = df_rep['saldo_n'].sum()
+            cant_o = len(df_rep)
+            
+            m1.metric("Órdenes", f"{cant_o}")
+            m2.metric("Ventas Totales", formato_pesos(total_v))
+            m3.metric("Recaudado (Abonos)", formato_pesos(total_a))
+            m4.metric("Saldos Pendientes", formato_pesos(total_s))
+            
+            # --- TABLA DE RESULTADOS ---
+            st.markdown(f"### Detalle de Ventas: {emp_sel}")
+            if not df_rep.empty:
+                # Ordenar por fecha más reciente
+                df_rep = df_rep.sort_values(by='fecha_dt', ascending=False)
+                
+                st.dataframe(
+                    df_rep[['fecha', 'n_orden', 'cliente', 'descripcion', 'total', 'abono', 'saldo', 'estado', 'empleado']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # --- BOTÓN PARA DESCARGAR (Opcional pero útil) ---
+                csv = df_rep.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Descargar Reporte en CSV",
+                    data=csv,
+                    file_name=f"reporte_{emp_sel}_{f_inicio}.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.warning("No se encontraron registros para estos filtros.")
+
+            # --- GRÁFICO RÁPIDO (Visualización) ---
+            if not df_rep.empty and cant_o > 0:
+                st.write("---")
+                st.write("📈 **Resumen de Estados**")
+                resumen_estados = df_rep['estado'].value_counts()
+                st.bar_chart(resumen_estados)
 
     # --- HISTORIAL FILTRADO ---
     st.divider()
