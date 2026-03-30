@@ -28,7 +28,6 @@ def formato_pesos(valor):
 def a_numero(valor):
     try:
         if not valor or str(valor).strip() == "": return 0.0
-        # Limpieza robusta de símbolos y puntos
         s = str(valor).replace('$', '').replace(' ', '').replace('.', '').replace(',', '.')
         return float(s)
     except: return 0.0
@@ -104,9 +103,10 @@ if opcion == "Ventas":
         
         c7, c8 = st.columns(2)
         v_tot = c7.number_input("Total ($ COP)", min_value=0.0, step=1000.0, format="%.0f", key="t"+vs)
-        v_abo = c8.number_input("Abono Inicial ($ COP)", min_value=0.0, step=1000.0, format="%.0f", key="a"+vs)
+        c7.markdown(f"Confirmación: :green[**{formato_pesos(v_tot)}**]") 
         
-        st.caption(f"Visualización: {formato_pesos(v_tot)}") 
+        v_abo = c8.number_input("Abono Inicial ($ COP)", min_value=0.0, step=1000.0, format="%.0f", key="a"+vs)
+        c8.markdown(f"Confirmación: :green[**{formato_pesos(v_abo)}**]")
         
         v_desc = st.text_area("Descripción Trabajo", key="de"+vs)
         c9, c10 = st.columns(2)
@@ -118,7 +118,7 @@ if opcion == "Ventas":
                 payload = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": v_ord, "descripcion": v_desc, "total": v_tot, "abono": v_abo, "saldo": v_tot-v_abo, "metodo_pago": v_pag, "estado": v_est, "empleado": st.session_state['usuario'], "cliente": v_cli, "nit": v_nit, "celular": v_cel, "correo": v_cor, "factura": v_fac, "historial_pagos": f"${v_abo:,.0f} ({v_pag}) {datetime.now().date()}"}
                 if enviar_google(payload): st.session_state['limp_v'] += 1; st.success("¡Guardado!"); st.rerun()
 
-    with tabs[1]: # EDITAR ORDEN COMPLETO (CORREGIDO)
+    with tabs[1]: # EDITAR ORDEN COMPLETO
         st.subheader("Modificar Orden Existente")
         if not df_v.empty:
             orden_buscada = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
@@ -142,9 +142,14 @@ if opcion == "Ventas":
                     
                     col6, col7 = st.columns(2)
                     e_tot = col6.number_input("Total ($ COP)", value=float(val['total_n']), step=1000.0, format="%.0f")
-                    e_nuevo_abo = col7.number_input("Añadir nuevo abono ($ COP)", min_value=0.0, step=1000.0, format="%.0f")
+                    col6.markdown(f"Valor: :green[**{formato_pesos(e_tot)}**]")
                     
-                    st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])}")
+                    e_nuevo_abo = col7.number_input("Añadir nuevo abono ($ COP)", min_value=0.0, step=1000.0, format="%.0f")
+                    col7.markdown(f"Abonar: :green[**{formato_pesos(e_nuevo_abo)}**]")
+                    
+                    # Cálculo de nuevo saldo en tiempo real
+                    nuevo_saldo = e_tot - (val['abono_n'] + e_nuevo_abo)
+                    st.warning(f"Saldo actual en base: {formato_pesos(val['saldo_n'])} | **Saldo tras este cambio: {formato_pesos(nuevo_saldo)}**")
                     
                     col8, col9 = st.columns(2)
                     e_est = col8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
