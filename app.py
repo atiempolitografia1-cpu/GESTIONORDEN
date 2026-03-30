@@ -294,7 +294,7 @@ if opcion == "Ventas":
                     )
                 else:
                     st.info("No hay órdenes para este día.")
-             else:
+            else:
                 st.warning("No se pudieron cargar los datos del Excel.")
                 
                 
