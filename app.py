@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 import io
 
-# --- 1. CONFIGURACIÓN VISUAL ---
+# --- 1. CONFIGURACIÓN VISUAL (BOTÓN DE MENÚ REPARADO) ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
 
 st.markdown("""
@@ -12,7 +12,19 @@ st.markdown("""
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stDeployButton {display:none;}
     .block-container { padding-top: 2rem; padding-bottom: 2rem; }
-    section[data-testid="stSidebar"] { top: 0; }
+    
+    /* FORZAR VISIBILIDAD DEL BOTÓN DEL MENÚ (SIDEBAR) */
+    button[kind="headerNoPadding"] {
+        visibility: visible !important;
+        z-index: 9999991;
+        background-color: rgba(255,255,255,0.1);
+        border-radius: 5px;
+    }
+    
+    /* Asegurar que el sidebar no tape el contenido al abrirse */
+    section[data-testid="stSidebar"] { 
+        z-index: 1000000;
+    }
     </style>
     """, unsafe_allow_html=True)
 
