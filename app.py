@@ -136,25 +136,75 @@ if opcion == "Ventas":
                 p = {"accion": "insertar", "tipo_registro": "ventas", "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "n_orden": ord, "descripcion": desc, "total": float(tot), "abono": float(abo), "saldo": float(tot-abo), "metodo_pago": pag, "estado": est, "empleado": st.session_state['usuario'], "cliente": cli, "nit": nit, "celular": "", "correo": "", "factura": "NO", "historial_pagos": f"${abo:,.0f} ({pag}) {datetime.now().date()}"}
                 if enviar_google(p): st.session_state['limp'] += 1; st.rerun()
 
-    with tabs[1]: # EDITAR (USANDO EL FILTRO MAESTRO)
+    with tabs[1]: # ✏️ EDITAR / ABONAR / ELIMINAR
         if not df_v.empty:
-            # El selectbox ahora solo mostrará las órdenes permitidas en df_v
-            sel = st.selectbox("Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
+            sel = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
             if sel != "Seleccionar...":
                 val = df_v[df_v['n_orden'] == sel].iloc[0]
-                with st.form("f_ed"):
-                    e_cli = st.text_input("Cliente", value=val['cliente'])
-                    e_desc = st.text_area("Descripción", value=val['descripcion'])
+                
+                st.info(f"Orden: **{sel}** | Registrada por: **{val['empleado']}**")
+                
+                # --- FORMULARIO DE EDICIÓN ---
+                with st.form("f_edicion_pro"):
                     c1, c2 = st.columns(2)
-                    e_tot = a_numero(c1.text_input("Total", value=str(int(val['total_n']))))
-                    e_nab = a_numero(c2.text_input("Nuevo Abono", value="0"))
-                    e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
-                    if st.form_submit_button("💾 ACTUALIZAR"):
-                        h = val['historial_pagos'] + (f" | +${e_nab:,.0f} {datetime.now().date()}" if e_nab > 0 else "")
-                        p = {"accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": sel, "cliente": e_cli, "descripcion": e_desc, "total": float(e_tot), "abono": float(val['abono_n']+e_nab), "saldo": float(e_tot-(val['abono_n']+e_nab)), "estado": e_est, "historial_pagos": h}
-                        if enviar_google(p): st.success("Ok"); st.rerun()
+                    e_cli = c1.text_input("Cliente", value=val['cliente'])
+                    e_nit = c2.text_input("NIT / CC", value=val['nit'])
+                    
+                    c3, c4, c5 = st.columns(3)
+                    e_cel = c3.text_input("Celular", value=val['celular'])
+                    e_cor = c4.text_input("Correo", value=val['correo'])
+                    e_fac = c5.selectbox("Factura", ["NO", "SI"], index=0 if val['factura'] == "NO" else 1)
+                    
+                    e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
+                    
+                    c6, c7 = st.columns(2)
+                    e_tot = a_numero(c6.text_input("Total ($ COP)", value=str(int(val['total_n']))))
+                    e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
+                    
+                    nuevo_abono_total = val['abono_n'] + e_nab
+                    nuevo_saldo = e_tot - nuevo_abono_total
+                    st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
+                    
+                    c8, c9 = st.columns(2)
+                    e_est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
+                                         index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
+                    e_met = c9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA"])
+                    
+                    if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
+                        h_pago = val['historial_pagos']
+                        if e_nab > 0:
+                            h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {datetime.now().strftime('%d/%m/%Y')}"
+                        
+                        payload = {
+                            "accion": "actualizar",
+                            "tipo_registro": "ventas",
+                            "id_busqueda": sel,
+                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
+                            "descripcion": e_desc, "total": float(e_tot), "abono": float(nuevo_abono_total),
+                            "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
+                        }
+                        if enviar_google(payload):
+                            st.success("✅ Cambios guardados")
+                            st.rerun()
+
+                # --- SECCIÓN EXCLUSIVA PARA EL ADMIN (ELIMINAR) ---
+                if st.session_state['rol'] == 'admin':
+                    st.divider()
+                    with st.expander("🚨 ZONA DE PELIGRO - ELIMINAR ORDEN"):
+                        st.write("Esta acción borrará permanentemente la orden del sistema.")
+                        if st.button(f"🗑️ CONFIRMAR ELIMINAR ORDEN {sel}", use_container_width=True):
+                            # Enviar al Apps Script la instrucción de borrar
+                            # Nota: Asegúrate de que tu Apps Script maneje la acción 'eliminar'
+                            p_del = {
+                                "accion": "eliminar", 
+                                "tipo_registro": "ventas", 
+                                "id_busqueda": sel
+                            }
+                            if enviar_google(p_del):
+                                st.error(f"Orden {sel} eliminada")
+                                st.rerun()
         else:
-            st.info("No hay órdenes disponibles para editar.")
+            st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
         with tabs[2]: # REPORTES (PARA ADMIN)
