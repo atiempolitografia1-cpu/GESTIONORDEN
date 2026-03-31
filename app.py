@@ -160,10 +160,9 @@ if opcion == "Ventas":
                 st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
             else:
                 # Armamos el paquete de datos para Google Sheets
-                p = {
-                    "accion": "insertar",
+                p = {"accion": "insertar",
                     "tipo_registro": "ventas",
-                    "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "fecha": datetime.now().strftime("%Y-%m-%d"),
                     "n_orden": ord,
                     "descripcion": desc,
                     "total": float(tot),
