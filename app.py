@@ -316,7 +316,7 @@ if opcion == "Ventas":
         df_h = df_h[df_h['n_orden'].str.contains(busq, case=False) | df_h['cliente'].str.contains(busq, case=False)]
     
     # Definimos qué columnas ver (admin ve el nombre del empleado, el empleado no necesita verse a sí mismo)
-    cols = ['fecha','n_orden','cliente','total','abono','saldo','estado']
+    cols = ['fecha','n_orden','descripcion','cliente','total','abono','saldo','estado']
     if st.session_state['rol'] == 'admin': cols.append('empleado')
     
     st.dataframe(df_h[cols].iloc[::-1], use_container_width=True, hide_index=True)
