@@ -295,7 +295,7 @@ if opcion == "Ventas":
                 
                 # --- TABLA FINAL ---
                 if not df_final.empty:
-                    columnas_ver = ['fecha', 'n_orden', 'descripcion', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado']
+                    columnas_ver = ['fecha', 'n_orden', 'descripcion', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado','historial_pagos']
                     st.dataframe(
                         df_final[columnas_ver].sort_values('fecha', ascending=False),
                         use_container_width=True, hide_index=True
