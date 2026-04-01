@@ -61,22 +61,28 @@ def leer_datos(pestana):
             cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
             df = df.iloc[:, :len(cols)]
             df.columns = cols
-            
-            # --- PROCESAMIENTO CRÍTICO ---
             df['total_n'] = df['total'].apply(a_numero)
             df['abono_n'] = df['abono'].apply(a_numero)
             df['saldo_n'] = df['total_n'] - df['abono_n']
-            
-            # CREACIÓN DE COLUMNAS DE FECHA ESTABLES
             df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
-            df['solo_dia'] = df['fecha_dt'].dt.date # <--- ESTA ES LA QUE EVITA EL KEYERROR
+            df['solo_dia'] = df['fecha_dt'].dt.date
             
         elif pestana == "usuarios":
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
             
+        # --- NUEVO BLOQUE PARA LA PESTAÑA CAJA ---
+        elif pestana == "caja":
+            # Columnas: fecha, n_orden, valor, metodo, empleado
+            cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+            df = df.iloc[:, :len(cols_caja)]
+            df.columns = cols_caja
+            df['valor_n'] = df['valor'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
+            
         return df
-    except: return pd.DataFrame()
-        
+    except: 
+        return pd.DataFrame()
 
 def enviar_google(payload):
     try:
@@ -152,7 +158,7 @@ if opcion == "Ventas":
         
         c8, c9, c10 = st.columns(3)
         est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+v)
-        pag = c9.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA"], key="p"+v)
+        pag = c9.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
@@ -216,7 +222,7 @@ if opcion == "Ventas":
                     c8, c9 = st.columns(2)
                     e_est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
                                          index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
-                    e_met = c9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA"])
+                    e_met = c9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
                     
                     if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
                         h_pago = val['historial_pagos']
