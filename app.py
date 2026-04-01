@@ -160,8 +160,8 @@ if opcion == "Ventas":
         desc = st.text_area("Descripción del Trabajo", key="d"+v)
         
         c8, c9, c10 = st.columns(3)
-        est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], key="e"+v)
-        pag = c9.selectbox("Método de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
+        est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "ENTREGADO"], key="e"+v)
+        pag = c9.selectbox("Método de Pago", ["SIN ABONO", "EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
