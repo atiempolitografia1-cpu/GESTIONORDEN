@@ -31,7 +31,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwefjYpHKmQNY6BY9-DXWAxk2GNN6VVeiVDxzr0xV-3Z7Ab9QLwkLulFK5d60rqQCVSSA/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxm_8uD2F0WlF0cWEilDGYj80MBIWmwvlelWxjRjsipNfMgtU9_DTkHu2NkT1nX1T61ww/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
