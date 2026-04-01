@@ -212,7 +212,7 @@ if opcion == "Ventas":
                     nuevo_abono_total = val['abono_n'] + e_nab
                     nuevo_saldo = e_tot - nuevo_abono_total
                     st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
-                    e_est = st.selectbox("Estado de la Orden", ["EN PROCESO", "TERMINADO", "PAGADO"], 
+                    e_est = st.selectbox("Estado de la Orden", ["EN PROCESO", "TERMINADO", "ENTREGADO"], 
                                        index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
                     
                     if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
