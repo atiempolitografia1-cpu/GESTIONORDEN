@@ -137,37 +137,40 @@ if opcion == "Ventas":
     tabs = st.tabs(t_labels)
 
     # --- PESTAÑA REGISTRAR ---
-    with tabs[0]:
-        st.subheader("📝 Registrar Nueva Orden")
+with tabs[0]:
+    # 1. ESTA ES LA LÍNEA QUE TE FALTA (Define 'v' antes de usarla)
+    v = str(st.session_state.get('limp', 0)) 
     
-        # Añadimos una columna para la fecha manual
-        c_f1, c_f2 = st.columns([1, 2])
-        # Por defecto aparece la fecha de hoy, pero puedes cambiarla
-        fecha_manual = c_f1.date_input("📅 Fecha de la Orden", datetime.now().date())
+    st.subheader("📝 Registrar Nueva Orden")
     
-        c1, c2 = st.columns(2)
-        ord = c1.text_input("N° Orden", value=st.session_state.get('n_ord_s', ""))
-        cli = c2.text_input("Cliente")
-        
-        c3, c4, c5 = st.columns(3)
-        nit = c3.text_input("NIT / CC", key="ni"+v)
-        cel = c4.text_input("Celular", key="ce"+v)
-        cor = c5.text_input("Correo", key="co"+v)
-        
-        c6, c7 = st.columns(2)
-        tot = a_numero(c6.text_input("Total ($ COP)", value="0", key="t"+v))
-        abo = a_numero(c7.text_input("Abono Inicial ($ COP)", value="0", key="a"+v))
-        
-        # Ayudas visuales de moneda
-        c6.markdown(f'<div class="money-helper">{formato_pesos(tot)}</div>', unsafe_allow_html=True)
-        c7.markdown(f'<div class="money-helper">{formato_pesos(abo)}</div>', unsafe_allow_html=True)
-        
-        desc = st.text_area("Descripción del Trabajo", key="d"+v)
-        
-        c8, c9, c10 = st.columns(3)
-        est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "ENTREGADO"], key="e"+v)
-        pag = c9.selectbox("Método de Pago", ["SIN ABONO", "EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
-        fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
+    # Añadimos una columna para la fecha manual
+    c_f1, c_f2 = st.columns([1, 2])
+    fecha_manual = c_f1.date_input("📅 Fecha de la Orden", datetime.now().date())
+    
+    c1, c2 = st.columns(2)
+    # 2. SUGERENCIA: También ponle 'key' a estos dos para que se limpien con el botón
+    ord = c1.text_input("N° Orden", value=st.session_state.get('n_ord_s', ""), key="or"+v)
+    cli = c2.text_input("Cliente", key="cl"+v)
+    
+    c3, c4, c5 = st.columns(3)
+    nit = c3.text_input("NIT / CC", key="ni"+v)
+    cel = c4.text_input("Celular", key="ce"+v)
+    cor = c5.text_input("Correo", key="co"+v)
+    
+    c6, c7 = st.columns(2)
+    tot = a_numero(c6.text_input("Total ($ COP)", value="0", key="t"+v))
+    abo = a_numero(c7.text_input("Abono Inicial ($ COP)", value="0", key="a"+v))
+    
+    # Ayudas visuales de moneda
+    c6.markdown(f'<div class="money-helper">{formato_pesos(tot)}</div>', unsafe_allow_html=True)
+    c7.markdown(f'<div class="money-helper">{formato_pesos(abo)}</div>', unsafe_allow_html=True)
+    
+    desc = st.text_area("Descripción del Trabajo", key="d"+v)
+    
+    c8, c9, c10 = st.columns(3)
+    est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "ENTREGADO"], key="e"+v)
+    pag = c9.selectbox("Método de Pago", ["SIN ABONO", "EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
+    fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if not ord or not cli:
