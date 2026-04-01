@@ -232,83 +232,91 @@ if opcion == "Ventas":
                     st.rerun()
                     
     with tabs[1]: # ✏️ EDITAR / ABONAR / ELIMINAR
-        if not df_v.empty:
-            sel = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
-            if sel != "Seleccionar...":
-                val = df_v[df_v['n_orden'] == sel].iloc[0]
-                
-                st.info(f"Orden: **{sel}** | Registrada por: **{val['empleado']}**")
-                
-                # --- FORMULARIO DE EDICIÓN ---
-                with st.form("f_edicion_pro"):
-                    c1, c2 = st.columns(2)
-                    e_cli = c1.text_input("Cliente", value=val['cliente'])
-                    e_nit = c2.text_input("NIT / CC", value=val['nit'])
+            if not df_v.empty:
+                sel = st.selectbox("Seleccione la Orden a editar:", ["Seleccionar..."] + df_v['n_orden'].tolist())
+                if sel != "Seleccionar...":
+                    val = df_v[df_v['n_orden'] == sel].iloc[0]
                     
-                    c3, c4, c5 = st.columns(3)
-                    e_cel = c3.text_input("Celular", value=val['celular'])
-                    e_cor = c4.text_input("Correo", value=val['correo'])
-                    e_fac = c5.selectbox("Factura", ["NO", "SI"], index=0 if val['factura'] == "NO" else 1)
+                    st.info(f"Orden: **{sel}** | Registrada por: **{val['empleado']}**")
                     
-                    e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
-                    
-                    c6, c7 = st.columns(2)
-                    # Verificamos si es administrador para habilitar o deshabilitar el campo
-                    es_admin = st.session_state.get('rol') == 'admin'
-
-                    c6, c7 = st.columns(2)
-
-                    # Si no es admin, 'disabled' será True y el usuario solo podrá ver, no escribir
-                    e_tot = a_numero(c6.text_input("Total ($ COP)", 
-                               value=str(int(val['total_n'])), 
-                               disabled=not es_admin))
-
-                    e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
-
-                    nuevo_abono_total = val['abono_n'] + e_nab
-                    nuevo_saldo = e_tot - nuevo_abono_total
-                    st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
-                    
-                    c8, c9 = st.columns(2)
-                    e_est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], 
-                                         index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
-                    e_met = c9.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
-                    
-                    if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
-                        h_pago = val['historial_pagos']
-                        fecha_hoy = datetime.now().strftime('%d/%m/%Y')
+                    # --- FORMULARIO DE EDICIÓN ---
+                    with st.form("f_edicion_pro"):
+                        c1, c2 = st.columns(2)
+                        e_cli = c1.text_input("Cliente", value=val['cliente'])
+                        e_nit = c2.text_input("NIT / CC", value=val['nit'])
                         
-                        # Si hay un nuevo abono, actualizamos el historial
-                        if e_nab > 0:
-                            h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {fecha_hoy}"
+                        c3, c4, c5 = st.columns(3)
+                        e_cel = c3.text_input("Celular", value=val['celular'])
+                        e_cor = c4.text_input("Correo", value=val['correo'])
+                        e_fac = c5.selectbox("Factura", ["NO", "SI"], index=0 if val['factura'] == "NO" else 1)
                         
-                        # 1. PAQUETE PARA ACTUALIZAR LA ORDEN (Lo que ya tenías)
-                        payload = {
-                            "accion": "actualizar",
-                            "tipo_registro": "ventas",
-                            "id_busqueda": sel,
-                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
-                            "descripcion": e_desc, "total": float(e_tot), "abono": float(nuevo_abono_total),
-                            "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
-                        }
+                        e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                         
-                        if enviar_google(payload):
-                            # --- ESTE ES EL PASO CLAVE PARA TU JEFE ---
-                            # 2. Si el usuario puso plata nueva, la mandamos a la tabla 'caja'
-                            if e_nab > 0:
-                                p_caja_nuevo = {
-                                    "accion": "insertar",
-                                    "tipo_registro": "caja",
-                                    "fecha": fecha_hoy,
-                                    "n_orden": str(sel),
-                                    "valor": float(e_nab),
-                                    "metodo": str(e_met),
-                                    "empleado": str(st.session_state['usuario'])
-                                }
-                                enviar_google(p_caja_nuevo)
+                        # --- SECCIÓN DE DINERO Y ABONOS ---
+                        st.divider()
+                        c6, c7 = st.columns(2)
+                        
+                        # Verificamos si es administrador para el campo Total
+                        es_admin = st.session_state.get('rol') == 'admin'
+
+                        e_tot = a_numero(c6.text_input("Total ($ COP)", 
+                                   value=str(int(val['total_n'])), 
+                                   disabled=not es_admin))
+
+                        e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
+
+                        # --- NUEVO CALENDARIO PARA FECHA DE ABONO ---
+                        c_fecha_edit, c_met_edit = st.columns(2)
+                        
+                        # Aquí eliges la fecha manual del abono (por defecto hoy)
+                        fecha_abono_manual = c_fecha_edit.date_input("📅 Fecha de este abono", datetime.now().date())
+                        e_met = c_met_edit.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
+
+                        # Cálculos automáticos
+                        nuevo_abono_total = val['abono_n'] + e_nab
+                        nuevo_saldo = e_tot - nuevo_abono_total
+                        
+                        st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
+                        
+                        # Estado de la orden
+                        e_est = st.selectbox("Estado de la Orden", ["EN PROCESO", "TERMINADO", "PAGADO"], 
+                                           index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
+                        
+                        if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
+                            h_pago = val['historial_pagos']
+                            # Convertimos la fecha seleccionada en el calendario a texto para el Excel
+                            f_abono_str = fecha_abono_manual.strftime('%d/%m/%Y')
                             
-                            st.success("✅ Orden actualizada y nuevo abono registrado en caja")
-                            st.rerun()
+                            # Si hay un nuevo abono, actualizamos el historial con la fecha manual
+                            if e_nab > 0:
+                                h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {f_abono_str}"
+                            
+                            # 1. PAQUETE PARA ACTUALIZAR LA ORDEN
+                            payload = {
+                                "accion": "actualizar",
+                                "tipo_registro": "ventas",
+                                "id_busqueda": sel,
+                                "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
+                                "descripcion": e_desc, "total": float(e_tot), "abono": float(nuevo_abono_total),
+                                "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
+                            }
+                            
+                            if enviar_google(payload):
+                                # 2. Si el usuario puso plata nueva, la mandamos a la tabla 'caja' con la fecha manual
+                                if e_nab > 0:
+                                    p_caja_nuevo = {
+                                        "accion": "insertar",
+                                        "tipo_registro": "caja",
+                                        "fecha": f_abono_str, # <--- USAMOS LA FECHA DEL CALENDARIO
+                                        "n_orden": str(sel),
+                                        "valor": float(e_nab),
+                                        "metodo": str(e_met),
+                                        "empleado": str(st.session_state['usuario'])
+                                    }
+                                    enviar_google(p_caja_nuevo)
+                                
+                                st.success(f"✅ Orden actualizada. Abono registrado el día {f_abono_str}")
+                                st.rerun()
 
                 # --- SECCIÓN EXCLUSIVA PARA EL ADMIN (ELIMINAR) ---
                 if st.session_state['rol'] == 'admin':
