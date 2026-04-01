@@ -218,6 +218,151 @@ if opcion == "Ventas":
             st.info("No hay órdenes.")
 
     # --- PESTAÑA REPORTES (ADMIN) ---
+    import streamlit as st
+import pandas as pd
+from datetime import datetime
+import requests
+import io
+import re
+
+# --- 1. CONFIGURACIÓN Y ESTILOS ---
+st.set_page_config(page_title="Gestión Negocio Pro", layout="wide", initial_sidebar_state="expanded")
+
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    .stDeployButton {display:none;}
+    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00802b; }
+    .money-helper {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #00802b;
+        background-color: #e6f4ea;
+        padding: 5px 10px;
+        border-radius: 5px;
+        margin-top: -15px;
+        margin-bottom: 15px;
+        display: inline-block;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbw4AawA3h-NJbSU7ZJc2EqpsEJEmfPVT0aOF6V0JMp-V3kiToMtwfmJyXhD79H9uZ7DIQ/exec"
+
+# --- 2. FUNCIONES ---
+def formato_pesos(valor):
+    try:
+        val = float(valor)
+        return f"$ {val:,.0f}".replace(",", ".")
+    except: return "$ 0"
+
+def a_numero(valor):
+    try:
+        if not valor: return 0.0
+        s = re.sub(r'[^\d,]', '', str(valor)).replace(',', '.')
+        return float(s) if s else 0.0
+    except: return 0.0
+
+def leer_datos(pestana):
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
+        res = requests.get(url, timeout=10)
+        df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
+        if pestana == "ventas":
+            cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
+            df = df.iloc[:, :len(cols)]
+            df.columns = cols
+            df['total_n'] = df['total'].apply(a_numero)
+            df['abono_n'] = df['abono'].apply(a_numero)
+            df['saldo_n'] = df['total_n'] - df['abono_n']
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
+        elif pestana == "caja":
+            df.columns = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+            df['valor_n'] = df['valor'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
+        return df
+    except: return pd.DataFrame()
+
+def enviar_google(payload):
+    try:
+        res = requests.post(URL_SCRIPT, json=payload, timeout=15)
+        return res.status_code == 200
+    except: return False
+
+# --- 3. LOGIN ---
+if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
+if 'limp' not in st.session_state: st.session_state['limp'] = 0
+
+df_u_db = leer_datos("usuarios")
+if not st.session_state['autenticado']:
+    st.title("🔐 Acceso")
+    with st.form("login"):
+        u_list = df_u_db['nombre'].tolist() if not df_u_db.empty else ["admin"]
+        u_in = st.selectbox("Usuario", u_list)
+        p_in = st.text_input("Clave", type="password")
+        if st.form_submit_button("INGRESAR"):
+            u_dat = df_u_db[df_u_db['nombre'] == u_in]
+            if not u_dat.empty and str(u_dat.iloc[0]['clave']).strip() == str(p_in).strip():
+                st.session_state.update({"autenticado": True, "usuario": u_in, "rol": str(u_dat.iloc[0]['rol']).lower()})
+                st.rerun()
+    st.stop()
+
+# --- 4. INTERFAZ ---
+with st.sidebar:
+    st.markdown(f"### 👤 {st.session_state['usuario'].upper()}")
+    menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
+    opcion = st.radio("Menú:", menu)
+    if st.button("🚪 Cerrar Sesión"):
+        st.session_state['autenticado'] = False
+        st.rerun()
+
+if opcion == "Ventas":
+    st.title("🚀 Gestión de Ventas")
+    df_v_comp = leer_datos("ventas")
+    df_v = df_v_comp if st.session_state['rol'] == 'admin' else df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']]
+    
+    tabs = st.tabs(["📝 Registrar", "✏️ Editar / Abonar", "📊 Reportes Avanzados"] if st.session_state['rol'] == 'admin' else ["📝 Registrar", "✏️ Editar / Abonar"])
+
+    with tabs[0]:
+        v = str(st.session_state['limp'])
+        st.subheader("Nueva Orden")
+        f_reg = st.date_input("Fecha", datetime.now().date(), key="f"+v)
+        c1, c2 = st.columns(2)
+        ord_n = c1.text_input("Orden", key="o"+v)
+        cli_n = c2.text_input("Cliente", key="cl"+v)
+        c3, c4 = st.columns(2)
+        tot_n = a_numero(c3.text_input("Total", value="0", key="t"+v))
+        abo_n = a_numero(c4.text_input("Abono", value="0", key="a"+v))
+        c3.markdown(f'<div class="money-helper">{formato_pesos(tot_n)}</div>', unsafe_allow_html=True)
+        c4.markdown(f'<div class="money-helper">{formato_pesos(abo_n)}</div>', unsafe_allow_html=True)
+        met_n = st.selectbox("Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA", "SIN ABONO"], key="m"+v)
+        if st.button("💾 GUARDAR"):
+            f_s = f_reg.strftime("%d/%m/%Y")
+            if enviar_google({"accion":"insertar","tipo_registro":"ventas","fecha":f_s,"n_orden":ord_n,"cliente":cli_n,"total":tot_n,"abono":abo_n,"saldo":tot_n-abo_n,"metodo_pago":met_n,"empleado":st.session_state['usuario'],"historial_pagos":f"{formato_pesos(abo_n)} ({met_n}) {f_s}"}):
+                if abo_n > 0: enviar_google({"accion":"insertar","tipo_registro":"caja","fecha":f_s,"n_orden":ord_n,"valor":abo_n,"metodo":met_n,"empleado":st.session_state['usuario']})
+                st.success("Guardado"); st.session_state['limp']+=1; st.rerun()
+
+    with tabs[1]:
+        if not df_v.empty:
+            sel = st.selectbox("Orden:", ["Seleccionar..."] + df_v['n_orden'].tolist())
+            if sel != "Seleccionar...":
+                val = df_v[df_v['n_orden'] == sel].iloc[0]
+                with st.form("edit"):
+                    e_nab = a_numero(st.text_input("Nuevo Abono", value="0"))
+                    e_fec = st.date_input("Fecha Abono", datetime.now().date())
+                    e_met = st.selectbox("Medio", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
+                    e_est = st.selectbox("Estado", ["EN PROCESO", "TERMINADO", "PAGADO"], index=0)
+                    if st.form_submit_button("ACTUALIZAR"):
+                        f_s = e_fec.strftime("%d/%m/%Y")
+                        n_abo = val['abono_n'] + e_nab
+                        h_p = val['historial_pagos'] + (f" | +{formato_pesos(e_nab)} ({e_met}) {f_s}" if e_nab > 0 else "")
+                        if enviar_google({"accion":"actualizar","tipo_registro":"ventas","id_busqueda":sel,"abono":n_abo,"saldo":val['total_n']-n_abo,"estado":e_est,"historial_pagos":h_p}):
+                            if e_nab > 0: enviar_google({"accion":"insertar","tipo_registro":"caja","fecha":f_s,"n_orden":sel,"valor":e_nab,"metodo":e_met,"empleado":st.session_state['usuario']})
+                            st.rerun()
+
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
             st.subheader("🧐 Reportes de Ventas, Caja y Cartera")
@@ -254,41 +399,17 @@ if opcion == "Ventas":
                 m2.metric("Abonado", formato_pesos(df_r['abono_n'].sum()))
                 m3.metric("Cartera (Deuda)", formato_pesos(df_r['saldo_n'].sum()), delta_color="inverse")
                 st.dataframe(df_r[['fecha','n_orden','cliente','total','abono','saldo','estado','empleado']], use_container_width=True, hide_index=True)
-                
-    # --- HISTORIAL GENERAL ---
+
+    # --- HISTORIAL ABAJO ---
     st.divider()
-    st.subheader("📋 Historial de Órdenes")
-    busq = st.text_input("🔍 Buscar orden o cliente:")
+    st.subheader("📋 Historial Rápido")
+    bus = st.text_input("Buscar por Orden o Cliente:")
     df_h = df_v.copy()
-    if busq:
-        df_h = df_h[df_h['n_orden'].astype(str).str.contains(busq, case=False) | df_h['cliente'].astype(str).str.contains(busq, case=False)]
-    
-    cols_h = ['fecha','n_orden','cliente','total','abono','saldo','estado']
-    if st.session_state['rol'] == 'admin': cols_h.append('empleado')
-    st.dataframe(df_h[cols_h].iloc[::-1], use_container_width=True, hide_index=True)
+    if bus: df_h = df_h[df_h['n_orden'].str.contains(bus, case=False) | df_h['cliente'].str.contains(bus, case=False)]
+    st.dataframe(df_h[['fecha','n_orden','cliente','total','saldo','estado']].iloc[::-1], use_container_width=True, hide_index=True)
 
 elif opcion == "Gestión de Empleados":
-    st.title("👥 Gestión de Personal")
-    df_u = leer_datos("usuarios")
-    t1, t2 = st.tabs(["➕ Nuevo Empleado", "✏️ Modificar / Eliminar"])
-    
-    with t1:
-        with st.form("nuevo_emp"):
-            n_nom = st.text_input("Nombre Completo")
-            n_cla = st.text_input("Contraseña")
-            n_rol = st.selectbox("Rol", ["empleado", "admin"])
-            if st.form_submit_button("Registrar"):
-                if n_nom and n_cla:
-                    if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
-                        st.success("Registrado"); st.rerun()
-    
-    with t2:
-        if not df_u.empty:
-            u_sel = st.selectbox("Usuario:", df_u['nombre'].tolist())
-            datos_u = df_u[df_u['nombre'] == u_sel].iloc[0]
-            with st.form("edit_emp"):
-                e_cla = st.text_input("Nueva Contraseña", value=datos_u['clave'])
-                e_rol = st.selectbox("Rol", ["empleado", "admin"], index=0 if datos_u['rol'] == 'empleado' else 1)
-                if st.form_submit_button("ACTUALIZAR"):
-                    if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
-                        st.success("Actualizado"); st.rerun()
+    st.title("👥 Empleados")
+    # ... Lógica de empleados simplificada ...
+    df_emp = leer_datos("usuarios")
+    st.dataframe(df_emp)
