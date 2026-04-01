@@ -334,7 +334,7 @@ if opcion == "Ventas":
                             if enviar_google(p_del):
                                 st.error(f"Orden {sel} eliminada")
                                 st.rerun()
-        else:
+            else:
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
