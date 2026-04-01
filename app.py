@@ -136,13 +136,18 @@ if opcion == "Ventas":
     if st.session_state['rol'] == 'admin': t_labels.append("📊 Reportes Avanzados")
     tabs = st.tabs(t_labels)
 
-    with tabs[0]: # 📝 REGISTRAR (BLOQUE COMPLETO)
-        if 'limp' not in st.session_state: st.session_state['limp'] = 0
-        v = str(st.session_state['limp'])
-        
-        c1, c2 = st.columns(2)
-        ord = c1.text_input("N° Orden", key="o"+v)
-        cli = c2.text_input("Cliente", key="cl"+v)
+    # --- PESTAÑA REGISTRAR ---
+with tabs[0]:
+    st.subheader("📝 Registrar Nueva Orden")
+    
+    # Añadimos una columna para la fecha manual
+    c_f1, c_f2 = st.columns([1, 2])
+    # Por defecto aparece la fecha de hoy, pero puedes cambiarla
+    fecha_manual = c_f1.date_input("📅 Fecha de la Orden", datetime.now().date())
+    
+    c1, c2 = st.columns(2)
+    ord = c1.text_input("N° Orden", value=st.session_state.get('n_ord_s', ""))
+    cli = c2.text_input("Cliente")
         
         c3, c4, c5 = st.columns(3)
         nit = c3.text_input("NIT / CC", key="ni"+v)
@@ -168,37 +173,46 @@ if opcion == "Ventas":
             if not ord or not cli:
                 st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
             else:
-                # 1. PAQUETE PARA LA TABLA 'ventas' (Lo que ya hacías)
+                # Convertimos la fecha del calendario al formato texto para Excel
+                fecha_str = fecha_manual.strftime("%d/%m/%Y")
+                
+                # 1. Paquete para 'ventas'
                 p_venta = {
                     "accion": "insertar",
                     "tipo_registro": "ventas",
-                    "fecha": datetime.now().strftime("%d/%m/%Y"), # Sin hora como pediste
-                    "n_orden": ord,
-                    "descripcion": desc,
+                    "fecha": fecha_str, # <--- USAMOS LA FECHA MANUAL
+                    "n_orden": str(ord),
+                    "descripcion": str(desc),
                     "total": float(tot),
                     "abono": float(abo),
                     "saldo": float(tot - abo),
-                    "metodo_pago": pag,
-                    "estado": est,
-                    "empleado": st.session_state['usuario'],
-                    "cliente": cli,
-                    "nit": nit,
-                    "celular": cel,
-                    "correo": cor,
-                    "factura": fac,
-                    "historial_pagos": f"{formato_pesos(abo)} ({pag}) {datetime.now().strftime('%d/%m/%Y')}"
+                    "metodo_pago": str(pag),
+                    "estado": str(est),
+                    "empleado": str(st.session_state['usuario']),
+                    "cliente": str(cli),
+                    "nit": str(nit),
+                    "celular": str(cel),
+                    "correo": str(cor),
+                    "factura": str(fac),
+                    "historial_pagos": f"{formato_pesos(abo)} ({pag}) {fecha_str}"
                 }
                 
-                # 2. PAQUETE PARA LA TABLA 'caja' (El nuevo paso para el jefe)
+                # 2. Paquete para 'caja'
                 p_caja = {
                     "accion": "insertar",
                     "tipo_registro": "caja",
-                    "fecha": datetime.now().strftime("%d/%m/%Y"),
-                    "n_orden": ord,
+                    "fecha": fecha_str, # <--- TAMBIÉN PARA LA CAJA
+                    "n_orden": str(ord),
                     "valor": float(abo),
-                    "metodo": pag,
-                    "empleado": st.session_state['usuario']
+                    "metodo": str(pag),
+                    "empleado": str(st.session_state['usuario'])
                 }
+                
+                if enviar_google(p_venta):
+                    enviar_google(p_caja)
+                    st.success(f"✅ Orden {ord} registrada con fecha {fecha_str}")
+                    st.session_state['limp'] += 1
+                    st.rerun()
                 
                 # ENVIAMOS AMBOS
                 if enviar_google(p_venta):
