@@ -232,16 +232,16 @@ if opcion == "Ventas":
                     
                     c6, c7 = st.columns(2)
                     # Verificamos si es administrador para habilitar o deshabilitar el campo
-es_admin = st.session_state.get('rol') == 'admin'
+                    es_admin = st.session_state.get('rol') == 'admin'
 
-c6, c7 = st.columns(2)
+                    c6, c7 = st.columns(2)
 
-# Si no es admin, 'disabled' será True y el usuario solo podrá ver, no escribir
-e_tot = a_numero(c6.text_input("Total ($ COP)", 
+                    # Si no es admin, 'disabled' será True y el usuario solo podrá ver, no escribir
+                    e_tot = a_numero(c6.text_input("Total ($ COP)", 
                                value=str(int(val['total_n'])), 
                                disabled=not es_admin))
 
-e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
+                    e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
 
                     nuevo_abono_total = val['abono_n'] + e_nab
                     nuevo_saldo = e_tot - nuevo_abono_total
