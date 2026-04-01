@@ -296,30 +296,64 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     if st.session_state['rol'] == 'admin':
-        with tabs[2]: # 📊 REPORTES (ADMIN)
-            st.subheader("🧐 Auditoría de Ventas y Cartera")
+        with tabs[2]: # 📊 REPORTES (ADMIN) - VERSIÓN AUDITORÍA TOTAL
+            st.subheader("🧐 Auditoría de Ventas, Caja y Cartera")
             
+            # --- 1. CARGA DE DATOS ---
+            df_caja = leer_datos("caja")
+            
+            # --- 2. FILTROS PRINCIPALES ---
             c1, c2, c3 = st.columns(3)
             f_ini = c1.date_input("📅 Desde", datetime.now().date())
             f_fin = c2.date_input("📅 Hasta", datetime.now().date())
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
-            # --- ESTA ES LA LÍNEA QUE TE FALTA ---
+            # --- SECCIÓN A: CUADRE DE CAJA REAL (Lo que pidió el jefe) ---
+            st.markdown("### 💰 Cuadre de Caja (Dinero Ingresado)")
+            if not df_caja.empty:
+                # Filtramos la tabla CAJA por fecha y empleado
+                df_c_fil = df_caja[(df_caja['solo_dia'] >= f_ini) & (df_caja['solo_dia'] <= f_fin)]
+                if e_sel != "TODOS":
+                    df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
+
+                # Desglose por Empleado en Expanders
+                emps_activos = df_c_fil['empleado'].unique()
+                if len(emps_activos) > 0:
+                    for emp in emps_activos:
+                        with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
+                            df_emp = df_c_fil[df_c_fil['empleado'] == emp]
+                            col1, col2, col3, col4 = st.columns(4)
+                            
+                            # Métodos de pago con sus iconos
+                            m_pagos = {"EFECTIVO": ("💵", col1), "NEQUI": ("📱", col2), 
+                                       "BANCOLOMBIA": ("🏦", col3), "DAVIPLATA": ("📲", col4)}
+                            
+                            for met, (ico, columna) in m_pagos.items():
+                                suma = df_emp[df_emp['metodo'] == met]['valor_n'].sum()
+                                columna.metric(f"{ico} {met}", formato_pesos(suma))
+                            
+                            st.write(f"**Total de {emp} en este rango:** {formato_pesos(df_emp['valor_n'].sum())}")
+                else:
+                    st.info("No hubo ingresos de dinero en este rango de fechas.")
+            else:
+                st.warning("La tabla de caja está vacía.")
+
+            st.divider()
+
+            # --- SECCIÓN B: BUSCADOR DE VENTAS Y CARTERA (Tu código mejorado) ---
+            st.markdown("### 🔍 Buscador de Órdenes y Cartera")
             filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
-            # --- FILTRADO ---
             df_r = df_v_comp.copy()
             
-            # 1. Filtro de Fecha (Usando la columna 'solo_dia' que creamos en leer_datos)
             if not df_r.empty and 'solo_dia' in df_r.columns:
+                # Aplicamos los mismos filtros de fecha y empleado
                 df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
-                
-                # 2. Filtro de Empleado
                 if e_sel != "TODOS":
                     df_r = df_r[df_r['empleado'] == e_sel]
 
-                # 3. Filtro de Pago (MATEMÁTICO: Solo saldo 0 es cancelado)
+                # Filtro matemático de estado
                 if "Pendientes" in filtro_pago:
                     df_final = df_r[df_r['saldo_n'] > 0]
                 elif "Canceladas" in filtro_pago:
@@ -327,25 +361,25 @@ if opcion == "Ventas":
                 else:
                     df_final = df_r.copy()
 
-                # --- MÉTRICAS ---
-                st.divider()
+                # Métricas de la tabla de Ventas
                 m1, m2, m3 = st.columns(3)
-                m1.metric("Valor Total", formato_pesos(df_final['total_n'].sum()))
-                m2.metric("Recaudado", formato_pesos(df_final['abono_n'].sum()))
-                m3.metric("Cartera", formato_pesos(df_final['saldo_n'].sum()))
+                m1.metric("Valor Total Ventas", formato_pesos(df_final['total_n'].sum()))
+                m2.metric("Abonado (Historico)", formato_pesos(df_final['abono_n'].sum()))
+                m3.metric("Cartera (Deuda)", formato_pesos(df_final['saldo_n'].sum()), delta_color="inverse")
                 
-                # --- TABLA FINAL ---
+                # Tabla de resultados con el historial de pagos
                 if not df_final.empty:
-                    columnas_ver = ['fecha', 'n_orden', 'descripcion', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado','historial_pagos']
+                    # Limpiamos la fecha para que no salga la hora
+                    df_vis = df_final.copy()
+                    df_vis['fecha'] = pd.to_datetime(df_vis['fecha']).dt.strftime('%d/%m/%Y')
+                    
+                    columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado', 'historial_pagos']
                     st.dataframe(
-                        df_final[columnas_ver].sort_values('fecha', ascending=False),
+                        df_vis[columnas_ver].sort_values('n_orden', ascending=False),
                         use_container_width=True, hide_index=True
                     )
                 else:
                     st.info("No hay órdenes con estos filtros.")
-            else:
-                st.warning("Asegúrate de que la función leer_datos esté actualizada con 'solo_dia'.")
-
 
     
     # --- HISTORIAL FILTRADO ---
