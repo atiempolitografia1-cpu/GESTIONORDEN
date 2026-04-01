@@ -220,27 +220,41 @@ if opcion == "Ventas":
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
-            st.subheader("📊 Reportes y Auditoría")
+            st.subheader("🧐 Reportes de Ventas, Caja y Cartera")
             df_caja = leer_datos("caja")
             c1, c2, c3 = st.columns(3)
-            f_ini = c1.date_input("📅 Desde", datetime.now().date(), key="rep_ini")
-            f_fin = c2.date_input("📅 Hasta", datetime.now().date(), key="rep_fin")
-            lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
-            e_sel = c3.selectbox("👤 Empleado", lista_emp)
+            f_i = c1.date_input("Desde", datetime.now().date())
+            f_f = c2.date_input("Hasta", datetime.now().date())
+            e_s = c3.selectbox("Empleado", ["TODOS"] + df_u_db['nombre'].tolist())
 
+            # --- SECCION CAJA REAL ---
+            st.markdown("### 💰 Cuadre de Caja")
             if not df_caja.empty:
-                df_c_fil = df_caja[(df_caja['solo_dia'] >= f_ini) & (df_caja['solo_dia'] <= f_fin)]
-                if e_sel != "TODOS": df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
-                st.metric("Total Recaudado en Caja", formato_pesos(df_c_fil['valor_n'].sum()))
-                st.dataframe(df_c_fil, use_container_width=True, hide_index=True)
+                df_c_f = df_caja[(df_caja['solo_dia'] >= f_i) & (df_caja['solo_dia'] <= f_f)]
+                if e_s != "TODOS": df_c_f = df_c_f[df_c_f['empleado'] == e_s]
+                for emp in df_c_f['empleado'].unique():
+                    with st.expander(f"Caja de: {emp.upper()}", expanded=True):
+                        df_e = df_c_f[df_c_f['empleado'] == emp]
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric("Efectivo", formato_pesos(df_e[df_e['metodo']=="EFECTIVO"]['valor_n'].sum()))
+                        col2.metric("Nequi", formato_pesos(df_e[df_e['metodo']=="NEQUI"]['valor_n'].sum()))
+                        col3.metric("Bancolombia", formato_pesos(df_e[df_e['metodo']=="BANCOLOMBIA"]['valor_n'].sum()))
+                        col4.metric("Daviplata", formato_pesos(df_e[df_e['metodo']=="DAVIPLATA"]['valor_n'].sum()))
+                        st.write(f"**Total {emp}:** {formato_pesos(df_e['valor_n'].sum())}")
 
+            # --- SECCION CARTERA ---
             st.divider()
-            with st.expander("🚨 MANTENIMIENTO"):
-                confirmar = st.checkbox("Confirmar reseteo total")
-                if st.button("🔥 BORRAR TODO EL HISTORIAL", type="primary", disabled=not confirmar):
-                    if enviar_google({"accion": "limpiar_todo"}):
-                        st.success("Sistema limpio"); st.rerun()
-
+            st.markdown("### 🔍 Cartera y Saldos Pendientes")
+            df_r = df_v_comp.copy()
+            if not df_r.empty:
+                df_r = df_r[(df_r['solo_dia'] >= f_i) & (df_r['solo_dia'] <= f_f)]
+                if e_s != "TODOS": df_r = df_r[df_r['empleado'] == e_s]
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total Ventas", formato_pesos(df_r['total_n'].sum()))
+                m2.metric("Abonado", formato_pesos(df_r['abono_n'].sum()))
+                m3.metric("Cartera (Deuda)", formato_pesos(df_r['saldo_n'].sum()), delta_color="inverse")
+                st.dataframe(df_r[['fecha','n_orden','cliente','total','abono','saldo','estado','empleado']], use_container_width=True, hide_index=True)
+                
     # --- HISTORIAL GENERAL ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
