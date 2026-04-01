@@ -71,13 +71,16 @@ def leer_datos(pestana):
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
             
         # --- NUEVO BLOQUE PARA LA PESTAÑA CAJA ---
-        elif pestana == "caja":
-            # Columnas: fecha, n_orden, valor, metodo, empleado
+       elif pestana == "caja":
             cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
             df = df.iloc[:, :len(cols_caja)]
             df.columns = cols_caja
+            
+            # Limpieza extrema de números
             df['valor_n'] = df['valor'].apply(a_numero)
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            
+            # Convertir fecha asegurando el formato día/mes/año
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
             df['solo_dia'] = df['fecha_dt'].dt.date
             
         return df
