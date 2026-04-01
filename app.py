@@ -351,23 +351,19 @@ if opcion == "Ventas":
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
-            # --- SECCIÓN A: CUADRE DE CAJA REAL (Lo que pidió el jefe) ---
+            # --- SECCIÓN A: CUADRE DE CAJA REAL ---
             st.markdown("### 💰 Cuadre de Caja (Dinero Ingresado)")
             if not df_caja.empty:
-                # Filtramos la tabla CAJA por fecha y empleado
                 df_c_fil = df_caja[(df_caja['solo_dia'] >= f_ini) & (df_caja['solo_dia'] <= f_fin)]
                 if e_sel != "TODOS":
                     df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
 
-                # Desglose por Empleado en Expanders
                 emps_activos = df_c_fil['empleado'].unique()
                 if len(emps_activos) > 0:
                     for emp in emps_activos:
                         with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                             df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                             col1, col2, col3, col4 = st.columns(4)
-                            
-                            # Métodos de pago con sus iconos
                             m_pagos = {"EFECTIVO": ("💵", col1), "NEQUI": ("📱", col2), 
                                        "BANCOLOMBIA": ("🏦", col3), "DAVIPLATA": ("📲", col4)}
                             
@@ -383,19 +379,17 @@ if opcion == "Ventas":
 
             st.divider()
 
-            # --- SECCIÓN B: BUSCADOR DE VENTAS Y CARTERA (Tu código mejorado) ---
+            # --- SECCIÓN B: BUSCADOR DE VENTAS Y CARTERA ---
             st.markdown("### 🔍 Buscador de Órdenes y Cartera")
             filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
             
             df_r = df_v_comp.copy()
             
             if not df_r.empty and 'solo_dia' in df_r.columns:
-                # Aplicamos los mismos filtros de fecha y empleado
                 df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
                 if e_sel != "TODOS":
                     df_r = df_r[df_r['empleado'] == e_sel]
 
-                # Filtro matemático de estado
                 if "Pendientes" in filtro_pago:
                     df_final = df_r[df_r['saldo_n'] > 0]
                 elif "Canceladas" in filtro_pago:
@@ -403,61 +397,42 @@ if opcion == "Ventas":
                 else:
                     df_final = df_r.copy()
 
-                # Métricas de la tabla de Ventas
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Valor Total Ventas", formato_pesos(df_final['total_n'].sum()))
                 m2.metric("Abonado (Historico)", formato_pesos(df_final['abono_n'].sum()))
                 m3.metric("Cartera (Deuda)", formato_pesos(df_final['saldo_n'].sum()), delta_color="inverse")
                 
-                # Tabla de resultados con el historial de pagos
                 if not df_final.empty:
-                    # Limpiamos la fecha para que no salga la hora
                     df_vis = df_final.copy()
                     df_vis['fecha'] = pd.to_datetime(df_vis['fecha']).dt.strftime('%d/%m/%Y')
-                    
                     columnas_ver = ['fecha', 'n_orden', 'cliente', 'total', 'abono', 'saldo', 'estado', 'empleado', 'historial_pagos']
-                    st.dataframe(
-                        df_vis[columnas_ver].sort_values('n_orden', ascending=False),
-                        use_container_width=True, hide_index=True
-                    )
+                    st.dataframe(df_vis[columnas_ver].sort_values('n_orden', ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.info("No hay órdenes con estos filtros.")
-                    # Al final de tabs[2]
-        st.divider()
-        with st.expander("🚨 SECCIÓN DE PELIGRO - MANTENIMIENTO"):
-            st.warning("Esta acción borrará todas las ventas y registros de caja. Los usuarios NO se borrarán.")
-            
-            # Checkbox de seguridad
-            confirmar = st.checkbox("Entiendo que esta acción es irreversible")
-            
-            if st.button("🔥 BORRAR TODO EL HISTORIAL", type="primary", disabled=not confirmar):
-                p_limpiar = {
-                    "accion": "limpiar_todo"
-                }
-                if enviar_google(p_limpiar):
-                    st.success("✅ El sistema ha sido reseteado. Reiniciando...")
-                    st.rerun()
 
-    
+            st.divider()
+            with st.expander("🚨 SECCIÓN DE PELIGRO - MANTENIMIENTO"):
+                st.warning("Esta acción borrará todas las ventas y registros de caja.")
+                confirmar = st.checkbox("Entiendo que esta acción es irreversible")
+                if st.button("🔥 BORRAR TODO EL HISTORIAL", type="primary", disabled=not confirmar):
+                    if enviar_google({"accion": "limpiar_todo"}):
+                        st.success("✅ Sistema reseteado."); st.rerun()
 
-    
-    # --- HISTORIAL FILTRADO ---
+    # --- HISTORIAL FILTRADO (Fuera del bloque de pestañas) ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
     busq = st.text_input("🔍 Buscar:")
-    df_h = df_v.copy() # Aquí df_h ya viene filtrado por el Filtro Maestro
+    df_h = df_v.copy()
     if busq:
-        df_h = df_h[df_h['n_orden'].str.contains(busq, case=False) | df_h['cliente'].str.contains(busq, case=False)]
+        df_h = df_h[df_h['n_orden'].astype(str).str.contains(busq, case=False) | df_h['cliente'].astype(str).str.contains(busq, case=False)]
     
-    # Definimos qué columnas ver (admin ve el nombre del empleado, el empleado no necesita verse a sí mismo)
-    cols = ['fecha','n_orden','descripcion','cliente','total','abono','saldo','estado']
-    if st.session_state['rol'] == 'admin': cols.append('empleado')
-    
-    st.dataframe(df_h[cols].iloc[::-1], use_container_width=True, hide_index=True)
-
+    cols_h = ['fecha','n_orden','descripcion','cliente','total','abono','saldo','estado']
+    if st.session_state['rol'] == 'admin': cols_h.append('empleado')
+    st.dataframe(df_h[cols_h].iloc[::-1], use_container_width=True, hide_index=True)
 
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
+    # ... (Resto del código de empleados se mantiene igual)
     df_u = leer_datos("usuarios")
     t1, t2 = st.tabs(["➕ Nuevo Empleado", "✏️ Modificar / Eliminar"])
     
