@@ -165,10 +165,11 @@ if opcion == "Ventas":
             if not ord or not cli:
                 st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
             else:
-                # Armamos el paquete de datos para Google Sheets
-                p = {"accion": "insertar",
+                # 1. PAQUETE PARA LA TABLA 'ventas' (Lo que ya hacías)
+                p_venta = {
+                    "accion": "insertar",
                     "tipo_registro": "ventas",
-                    "fecha": datetime.now().strftime("%d/%m/%y"),
+                    "fecha": datetime.now().strftime("%d/%m/%Y"), # Sin hora como pediste
                     "n_orden": ord,
                     "descripcion": desc,
                     "total": float(tot),
@@ -176,7 +177,7 @@ if opcion == "Ventas":
                     "saldo": float(tot - abo),
                     "metodo_pago": pag,
                     "estado": est,
-                    "empleado": st.session_state['usuario'], # Se guarda quién lo registró
+                    "empleado": st.session_state['usuario'],
                     "cliente": cli,
                     "nit": nit,
                     "celular": cel,
@@ -185,9 +186,24 @@ if opcion == "Ventas":
                     "historial_pagos": f"{formato_pesos(abo)} ({pag}) {datetime.now().strftime('%d/%m/%Y')}"
                 }
                 
-                if enviar_google(p):
-                    st.success(f"✅ Orden {ord} guardada con éxito")
-                    st.session_state['limp'] += 1 # Limpia el formulario
+                # 2. PAQUETE PARA LA TABLA 'caja' (El nuevo paso para el jefe)
+                p_caja = {
+                    "accion": "insertar",
+                    "tipo_registro": "caja",
+                    "fecha": datetime.now().strftime("%d/%m/%Y"),
+                    "n_orden": ord,
+                    "valor": float(abo),
+                    "metodo": pag,
+                    "empleado": st.session_state['usuario']
+                }
+                
+                # ENVIAMOS AMBOS
+                if enviar_google(p_venta):
+                    # Solo enviamos a caja si la venta se guardó bien
+                    enviar_google(p_caja) 
+                    
+                    st.success(f"✅ Orden {ord} y primer abono registrados en caja")
+                    st.session_state['limp'] += 1
                     st.rerun()
                     
     with tabs[1]: # ✏️ EDITAR / ABONAR / ELIMINAR
