@@ -174,9 +174,13 @@ if opcion == "Ventas":
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
-            if not ord or not cli:
+            # --- BLOQUEO DE SEGURIDAD ---
+            if abo > 0 and pag == "SIN ABONO":
+                st.error("🚫 ¡Atención! Si hay un abono, debes elegir el medio de pago (Efectivo, Nequi, etc.). No puede ser 'SIN ABONO'.")
+            elif not ord or not cli:
                 st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
             else:
+               
                 # Convertimos la fecha del calendario al formato texto para Excel
                 fecha_str = fecha_manual.strftime("%d/%m/%Y")
                 
