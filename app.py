@@ -162,7 +162,7 @@ if opcion == "Ventas":
                 # Armamos el paquete de datos para Google Sheets
                 p = {"accion": "insertar",
                     "tipo_registro": "ventas",
-                    "fecha": datetime.now().strftime("%Y/%m/%d"),
+                    "fecha": datetime.now().strftime("%d/%m/%y"),
                     "n_orden": ord,
                     "descripcion": desc,
                     "total": float(tot),
