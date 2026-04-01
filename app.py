@@ -242,9 +242,13 @@ if opcion == "Ventas":
                     
                     if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
                         h_pago = val['historial_pagos']
-                        if e_nab > 0:
-                            h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {datetime.now().strftime('%d/%m/%Y')}"
+                        fecha_hoy = datetime.now().strftime('%d/%m/%Y')
                         
+                        # Si hay un nuevo abono, actualizamos el historial
+                        if e_nab > 0:
+                            h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {fecha_hoy}"
+                        
+                        # 1. PAQUETE PARA ACTUALIZAR LA ORDEN (Lo que ya tenías)
                         payload = {
                             "accion": "actualizar",
                             "tipo_registro": "ventas",
@@ -253,8 +257,23 @@ if opcion == "Ventas":
                             "descripcion": e_desc, "total": float(e_tot), "abono": float(nuevo_abono_total),
                             "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
                         }
+                        
                         if enviar_google(payload):
-                            st.success("✅ Cambios guardados")
+                            # --- ESTE ES EL PASO CLAVE PARA TU JEFE ---
+                            # 2. Si el usuario puso plata nueva, la mandamos a la tabla 'caja'
+                            if e_nab > 0:
+                                p_caja_nuevo = {
+                                    "accion": "insertar",
+                                    "tipo_registro": "caja",
+                                    "fecha": fecha_hoy,
+                                    "n_orden": str(sel),
+                                    "valor": float(e_nab),
+                                    "metodo": str(e_met),
+                                    "empleado": str(st.session_state['usuario'])
+                                }
+                                enviar_google(p_caja_nuevo)
+                            
+                            st.success("✅ Orden actualizada y nuevo abono registrado en caja")
                             st.rerun()
 
                 # --- SECCIÓN EXCLUSIVA PARA EL ADMIN (ELIMINAR) ---
