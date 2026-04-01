@@ -137,17 +137,17 @@ if opcion == "Ventas":
     tabs = st.tabs(t_labels)
 
     # --- PESTAÑA REGISTRAR ---
-with tabs[0]:
-    st.subheader("📝 Registrar Nueva Orden")
+    with tabs[0]:
+        st.subheader("📝 Registrar Nueva Orden")
     
-    # Añadimos una columna para la fecha manual
-    c_f1, c_f2 = st.columns([1, 2])
-    # Por defecto aparece la fecha de hoy, pero puedes cambiarla
-    fecha_manual = c_f1.date_input("📅 Fecha de la Orden", datetime.now().date())
+        # Añadimos una columna para la fecha manual
+        c_f1, c_f2 = st.columns([1, 2])
+        # Por defecto aparece la fecha de hoy, pero puedes cambiarla
+        fecha_manual = c_f1.date_input("📅 Fecha de la Orden", datetime.now().date())
     
-    c1, c2 = st.columns(2)
-    ord = c1.text_input("N° Orden", value=st.session_state.get('n_ord_s', ""))
-    cli = c2.text_input("Cliente")
+        c1, c2 = st.columns(2)
+        ord = c1.text_input("N° Orden", value=st.session_state.get('n_ord_s', ""))
+        cli = c2.text_input("Cliente")
         
         c3, c4, c5 = st.columns(3)
         nit = c3.text_input("NIT / CC", key="ni"+v)
