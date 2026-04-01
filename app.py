@@ -231,9 +231,18 @@ if opcion == "Ventas":
                     e_desc = st.text_area("Descripción Trabajo", value=val['descripcion'])
                     
                     c6, c7 = st.columns(2)
-                    e_tot = a_numero(c6.text_input("Total ($ COP)", value=str(int(val['total_n']))))
-                    e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
-                    
+                    # Verificamos si es administrador para habilitar o deshabilitar el campo
+es_admin = st.session_state.get('rol') == 'admin'
+
+c6, c7 = st.columns(2)
+
+# Si no es admin, 'disabled' será True y el usuario solo podrá ver, no escribir
+e_tot = a_numero(c6.text_input("Total ($ COP)", 
+                               value=str(int(val['total_n'])), 
+                               disabled=not es_admin))
+
+e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
+
                     nuevo_abono_total = val['abono_n'] + e_nab
                     nuevo_saldo = e_tot - nuevo_abono_total
                     st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
