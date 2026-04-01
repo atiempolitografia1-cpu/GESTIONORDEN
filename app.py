@@ -31,7 +31,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxm_8uD2F0WlF0cWEilDGYj80MBIWmwvlelWxjRjsipNfMgtU9_DTkHu2NkT1nX1T61ww/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyBqCLOP9O5g-dHvgNhHPsvK2YK7uRirDnyClTTbW0htkHXXF_2jEwz5mOpStlXNWQ/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -383,6 +383,23 @@ if opcion == "Ventas":
                     )
                 else:
                     st.info("No hay órdenes con estos filtros.")
+                    # Al final de tabs[2]
+        st.divider()
+        with st.expander("🚨 SECCIÓN DE PELIGRO - MANTENIMIENTO"):
+            st.warning("Esta acción borrará todas las ventas y registros de caja. Los usuarios NO se borrarán.")
+            
+            # Checkbox de seguridad
+            confirmar = st.checkbox("Entiendo que esta acción es irreversible")
+            
+            if st.button("🔥 BORRAR TODO EL HISTORIAL", type="primary", disabled=not confirmar):
+                p_limpiar = {
+                    "accion": "limpiar_todo"
+                }
+                if enviar_google(p_limpiar):
+                    st.success("✅ El sistema ha sido reseteado. Reiniciando...")
+                    st.rerun()
+
+    
 
     
     # --- HISTORIAL FILTRADO ---
