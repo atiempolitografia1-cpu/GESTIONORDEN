@@ -248,29 +248,65 @@ if opcion == "Ventas":
             st.info("No hay órdenes disponibles.")
 
     # --- PESTAÑA REPORTES (ADMIN) ---
+    # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
             st.subheader("🧐 Auditoría de Ventas, Caja y Cartera")
             df_caja = leer_datos("caja")
+            
             c1, c2, c3 = st.columns(3)
-            f_ini = c1.date_input("📅 Desde", datetime.now().date())
-            f_fin = c2.date_input("📅 Hasta", datetime.now().date())
+            f_ini = c1.date_input("📅 Desde", datetime.now().date(), key="f_ini_rep")
+            f_fin = c2.date_input("📅 Hasta", datetime.now().date(), key="f_fin_rep")
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
             
             st.markdown("### 💰 Cuadre de Caja (Dinero Ingresado)")
+            
             if not df_caja.empty:
                 df_c_fil = df_caja[(df_caja['solo_dia'] >= f_ini) & (df_caja['solo_dia'] <= f_fin)]
-                if e_sel != "TODOS": df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
+                if e_sel != "TODOS": 
+                    df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
+                
+                # --- AQUÍ INICIAN LOS TOTALES PARA EL GRAN RESUMEN ---
+                g_efe, g_neq, g_ban, g_dav = 0.0, 0.0, 0.0, 0.0
+
                 for emp in df_c_fil['empleado'].unique():
                     with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
-                        m_pagos = {"EFECTIVO": ("💵", col1), "NEQUI": ("📱", col2), "BANCOLOMBIA": ("🏦", col3), "DAVIPLATA": ("📲", col4)}
-                        for met, (ico, columna) in m_pagos.items():
-                            suma = df_emp[df_emp['metodo'] == met]['valor_n'].sum()
-                            columna.metric(f"{ico} {met}", formato_pesos(suma))
+                        
+                        # Cálculo individual por empleado
+                        s_efe = df_emp[df_emp['metodo'] == "EFECTIVO"]['valor_n'].sum()
+                        s_neq = df_emp[df_emp['metodo'] == "NEQUI"]['valor_n'].sum()
+                        s_ban = df_emp[df_emp['metodo'] == "BANCOLOMBIA"]['valor_n'].sum()
+                        s_dav = df_emp[df_emp['metodo'] == "DAVIPLATA"]['valor_n'].sum()
+                        
+                        # Mostrar métricas del empleado
+                        col1.metric("💵 EFECTIVO", formato_pesos(s_efe))
+                        col2.metric("📱 NEQUI", formato_pesos(s_neq))
+                        col3.metric("🏦 BANCO", formato_pesos(s_ban))
+                        col4.metric("📲 DAVIPLATA", formato_pesos(s_dav))
+                        
+                        # SUMAR AL TOTAL GLOBAL
+                        g_efe += s_efe
+                        g_neq += s_neq
+                        g_ban += s_ban
+                        g_dav += s_dav
+                        
                         st.write(f"**Total de {emp}:** {formato_pesos(df_emp['valor_n'].sum())}")
+
+                # --- CUADRO DE GRAN TOTAL (Solo se muestra si seleccionas TODOS) ---
+                if e_sel == "TODOS" and not df_c_fil.empty:
+                    st.divider()
+                    st.markdown("### 🏆 RESUMEN TOTAL DE TODA LA TIENDA")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.info(f"**Total Efectivo**\n\n{formato_pesos(g_efe)}")
+                    m2.info(f"**Total Nequi**\n\n{formato_pesos(g_neq)}")
+                    m3.info(f"**Total Banco**\n\n{formato_pesos(g_ban)}")
+                    m4.info(f"**Total Daviplata**\n\n{formato_pesos(g_dav)}")
+                    
+                    total_global = g_efe + g_neq + g_ban + g_dav
+                    st.success(f"## **RECAUDO TOTAL GLOBAL: {formato_pesos(total_global)}**")
 
             st.divider()
             st.markdown("### 🔍 Buscador de Órdenes y Cartera")
@@ -279,14 +315,15 @@ if opcion == "Ventas":
             if not df_r.empty and 'solo_dia' in df_r.columns:
                 df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
                 if e_sel != "TODOS": df_r = df_r[df_r['empleado'] == e_sel]
+                
                 if "Pendientes" in filtro_pago: df_final = df_r[df_r['saldo_n'] > 0]
                 elif "Canceladas" in filtro_pago: df_final = df_r[df_r['saldo_n'] <= 0]
                 else: df_final = df_r.copy()
 
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Valor Total Ventas", formato_pesos(df_final['total_n'].sum()))
-                m2.metric("Abonado (Historico)", formato_pesos(df_final['abono_n'].sum()))
-                m3.metric("Cartera (Deuda)", formato_pesos(df_final['saldo_n'].sum()), delta_color="inverse")
+                c_m1, c_m2, c_m3 = st.columns(3)
+                c_m1.metric("Valor Total Ventas", formato_pesos(df_final['total_n'].sum()))
+                c_m2.metric("Abonado (Historico)", formato_pesos(df_final['abono_n'].sum()))
+                c_m3.metric("Cartera (Deuda)", formato_pesos(df_final['saldo_n'].sum()), delta_color="inverse")
                 st.dataframe(df_final.sort_values('n_orden', ascending=False), use_container_width=True, hide_index=True)
 
             st.divider()
@@ -295,7 +332,7 @@ if opcion == "Ventas":
                 if st.button("🔥 BORRAR TODO EL HISTORIAL", type="primary", disabled=not confirmar):
                     if enviar_google({"accion": "limpiar_todo"}):
                         st.success("✅ Sistema reseteado."); st.rerun()
-
+                        
     # --- HISTORIAL FILTRADO ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
