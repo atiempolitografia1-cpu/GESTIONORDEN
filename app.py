@@ -249,6 +249,7 @@ if opcion == "Ventas":
 
     # --- PESTAÑA REPORTES (ADMIN) ---
     # --- PESTAÑA REPORTES (ADMIN) ---
+    # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
             st.subheader("🧐 Auditoría de Ventas, Caja y Cartera")
@@ -259,7 +260,20 @@ if opcion == "Ventas":
             f_fin = c2.date_input("📅 Hasta", datetime.now().date(), key="f_fin_rep")
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
+
+            # --- NUEVA SECCIÓN: CARTERA DEL DÍA ---
+            # Filtramos las ventas generales solo para el rango seleccionado
+            df_v_dia = df_v_comp[(df_v_comp['solo_dia'] >= f_ini) & (df_v_comp['solo_dia'] <= f_fin)]
+            if e_sel != "TODOS":
+                df_v_dia = df_v_dia[df_v_dia['empleado'] == e_sel]
             
+            cartera_del_periodo = df_v_dia['saldo_n'].sum()
+            
+            # Mostramos un banner destacado con la cartera
+            st.warning(f"### 🚩 Cartera del Periodo Seleccionado: {formato_pesos(cartera_del_periodo)}")
+            st.caption("Este es el valor total que los clientes aún deben de las ventas realizadas en estas fechas.")
+            
+            st.markdown("---")
             st.markdown("### 💰 Cuadre de Caja (Dinero Ingresado)")
             
             if not df_caja.empty:
@@ -267,10 +281,10 @@ if opcion == "Ventas":
                 if e_sel != "TODOS": 
                     df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
                 
-                # --- AQUÍ INICIAN LOS TOTALES PARA EL GRAN RESUMEN ---
                 g_efe, g_neq, g_ban, g_dav = 0.0, 0.0, 0.0, 0.0
 
                 for emp in df_c_fil['empleado'].unique():
+                    # ... (aquí sigue el resto de tu código de los expanders de empleados que pusimos antes)
                     with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
