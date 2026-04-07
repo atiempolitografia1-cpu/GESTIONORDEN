@@ -82,6 +82,10 @@ def leer_datos(pestana):
             # Convertir fecha asegurando el formato día/mes/año
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
             df['solo_dia'] = df['fecha_dt'].dt.date
+
+        # ... (debajo de donde termina el elif de "caja")
+        elif pestana == "horarios":
+            df.columns = ['fecha', 'empleado', 'evento', 'hora']
             
         return df
     except: 
