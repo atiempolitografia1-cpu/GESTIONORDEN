@@ -31,7 +31,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwsN0sDjy_uc8NlKe7lYBIeRDWjeD_tIOMi852D8K1RqAz4TYL2QVrMQUalREfegq608w/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzT2MW7gHuvcio7H8D7NV_fIwhUS6cXrSMO_4l4ao_r-WT4FN2Gw-NPGWc2WMoOSpBgoA/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -365,7 +365,6 @@ if opcion == "Ventas":
     st.dataframe(df_h[cols_h].iloc[::-1], use_container_width=True, hide_index=True)
     
     # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS ---
-    # Si es admin, es la pestaña 3. Si es empleado, es la pestaña 2.
     idx_horario = 3 if st.session_state['rol'] == 'admin' else 2
     
     with tabs[idx_horario]: 
@@ -382,26 +381,32 @@ if opcion == "Ventas":
             tipo_evento = col2.selectbox("Acción", ["Salida a Almuerzo 🍕", "Regreso de Almuerzo ✅"])
             
             if st.button("🚀 Registrar Hora Actual", use_container_width=True):
-                ahora = datetime.now()
+                from datetime import timedelta # Importante para la hora
+                # Ajuste de hora: Streamlit Cloud usa UTC. Restamos 5 horas para Colombia.
+                ahora_local = datetime.now() - timedelta(hours=5) 
+                
                 datos_hora = {
                     "accion": "guardar_almuerzo",
-                    "fecha": ahora.strftime("%d/%m/%Y"),
+                    "fecha": ahora_local.strftime("%d/%m/%Y"),
                     "empleado": emp_h,
                     "evento": tipo_evento,
-                    "hora": ahora.strftime("%I:%M:%S %p")
+                    "hora": ahora_local.strftime("%I:%M:%S %p")
                 }
+                
                 if enviar_google(datos_hora):
-                    st.success(f"✅ Registrado: {tipo_evento} a las {ahora.strftime('%I:%M %p')}")
+                    st.success(f"✅ Registrado a las {ahora_local.strftime('%I:%M %p')}")
                     st.balloons()
+                    st.rerun() # Para que aparezca en la tabla de abajo de una vez
                 else:
-                    st.error("❌ Error al conectar con Google Sheets.")
+                    st.error("❌ Error: Revisa la configuración de Google Script.")
 
         st.divider()
         st.markdown("### 📅 Registros de Hoy")
-        df_h = leer_datos("horarios")
-        if not df_h.empty:
-            hoy = datetime.now().strftime("%d/%m/%Y")
-            df_h_hoy = df_h[df_h['fecha'] == hoy]
+        df_h_data = leer_datos("horarios") # Cambié el nombre a df_h_data para evitar conflictos
+        if not df_h_data.empty:
+            # Volvemos a calcular 'hoy' con la hora ajustada para filtrar bien
+            hoy_local = (datetime.now() - timedelta(hours=5)).strftime("%d/%m/%Y")
+            df_h_hoy = df_h_data[df_h_data['fecha'] == hoy_local]
             if not df_h_hoy.empty:
                 st.dataframe(df_h_hoy[['empleado', 'evento', 'hora']], use_container_width=True, hide_index=True)
             else:
