@@ -135,8 +135,10 @@ if opcion == "Ventas":
         df_v = df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']].copy()
     
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
-    if st.session_state['rol'] == 'admin': t_labels.append("📊 Reportes Avanzados")
-    t_labels.append("⏰ Horarios") # <--- Esta es la nueva pestaña para todos
+    if st.session_state['rol'] == 'admin': 
+        t_labels.append("📊 Reportes Avanzados")
+        t_labels.append("⏰ Horarios") # Ahora solo entra si es admin
+        
     tabs = st.tabs(t_labels)
     
     
