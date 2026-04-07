@@ -132,7 +132,9 @@ if opcion == "Ventas":
     
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': t_labels.append("📊 Reportes Avanzados")
+    t_labels.append("⏰ Horarios") # <--- Esta es la nueva pestaña para todos
     tabs = st.tabs(t_labels)
+    
     
     # --- PESTAÑA REGISTRAR ---
     with tabs[0]:
@@ -357,6 +359,51 @@ if opcion == "Ventas":
     cols_h = ['fecha','n_orden','descripcion','cliente','total','abono','saldo','estado']
     if st.session_state['rol'] == 'admin': cols_h.append('empleado')
     st.dataframe(df_h[cols_h].iloc[::-1], use_container_width=True, hide_index=True)
+    
+    # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS ---
+    # Si es admin, es la pestaña 3. Si es empleado, es la pestaña 2.
+    idx_horario = 3 if st.session_state['rol'] == 'admin' else 2
+    
+    with tabs[idx_horario]: 
+        st.subheader("⏰ Control de Horarios de Almuerzo")
+        
+        with st.container(border=True):
+            col1, col2 = st.columns(2)
+            if st.session_state['rol'] == 'admin':
+                emp_h = col1.selectbox("Seleccionar Empleado", df_users_db['nombre'].tolist(), key="sel_emp_almuerzo")
+            else:
+                emp_h = st.session_state['usuario']
+                col1.info(f"Registrando para: **{emp_h}**")
+            
+            tipo_evento = col2.selectbox("Acción", ["Salida a Almuerzo 🍕", "Regreso de Almuerzo ✅"])
+            
+            if st.button("🚀 Registrar Hora Actual", use_container_width=True):
+                ahora = datetime.now()
+                datos_hora = {
+                    "accion": "guardar_almuerzo",
+                    "fecha": ahora.strftime("%d/%m/%Y"),
+                    "empleado": emp_h,
+                    "evento": tipo_evento,
+                    "hora": ahora.strftime("%I:%M:%S %p")
+                }
+                if enviar_google(datos_hora):
+                    st.success(f"✅ Registrado: {tipo_evento} a las {ahora.strftime('%I:%M %p')}")
+                    st.balloons()
+                else:
+                    st.error("❌ Error al conectar con Google Sheets.")
+
+        st.divider()
+        st.markdown("### 📅 Registros de Hoy")
+        df_h = leer_datos("horarios")
+        if not df_h.empty:
+            hoy = datetime.now().strftime("%d/%m/%Y")
+            df_h_hoy = df_h[df_h['fecha'] == hoy]
+            if not df_h_hoy.empty:
+                st.dataframe(df_h_hoy[['empleado', 'evento', 'hora']], use_container_width=True, hide_index=True)
+            else:
+                st.info("No hay registros de almuerzo hoy.")
+
+#fin pegado
 
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
