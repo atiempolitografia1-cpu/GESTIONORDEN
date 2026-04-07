@@ -31,7 +31,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzT2MW7gHuvcio7H8D7NV_fIwhUS6cXrSMO_4l4ao_r-WT4FN2Gw-NPGWc2WMoOSpBgoA/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzsd0qJS2AZP0TYPemtqEFX-uRni7oojNQDw69OtgVQXDvfWr_MTlwyv4KEDFsIXOdL7w/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -409,23 +409,44 @@ if opcion == "Ventas":
         
         if not df_h_raw.empty:
             from datetime import timedelta
-            # Calculamos la fecha de hoy ajustada a Colombia
             hoy_col = (datetime.now() - timedelta(hours=5)).strftime("%d/%m/%Y")
-            
-            # Limpiamos espacios en blanco por si acaso
             df_h_raw['fecha'] = df_h_raw['fecha'].astype(str).str.strip()
-            
-            # Filtramos
-            df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_col]
+            df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_col].copy()
             
             if not df_h_hoy.empty:
-                st.dataframe(df_h_hoy[['empleado', 'evento', 'hora']], use_container_width=True, hide_index=True)
+                # Mostramos la tabla con selección habilitada
+                event = st.dataframe(
+                    df_h_hoy[['empleado', 'evento', 'hora']], 
+                    use_container_width=True, 
+                    hide_index=False, # Necesitamos el índice para saber qué borrar
+                    on_select="rerun",
+                    selection_mode="single-row"
+                )
+
+                # Si hay una fila seleccionada, mostramos el botón de eliminar
+                selection = event.get("selection", {}).get("rows", [])
+                if selection:
+                    idx_seleccionado = selection[0]
+                    # Obtenemos los datos de la fila para confirmar
+                    fila_data = df_h_hoy.iloc[idx_seleccionado]
+                    
+                    st.warning(f"¿Eliminar registro de **{fila_data['empleado']}** ({fila_data['evento']})?")
+                    
+                    if st.button("🗑️ Confirmar Eliminación", type="primary"):
+                        # El ID de búsqueda será la HORA (ya que es lo más único que tenemos en esa tabla)
+                        datos_eliminar = {
+                            "accion": "eliminar_horario",
+                            "id_busqueda": fila_data['hora'],
+                            "tipo_registro": "horarios"
+                        }
+                        
+                        if enviar_google(datos_eliminar):
+                            st.success("Registro eliminado correctamente")
+                            st.rerun()
             else:
-                st.info(f"No hay registros para hoy ({hoy_col}). Registra uno para probar.")
-                # Opcional: Descomenta la línea de abajo para ver todos los registros y depurar
-                # st.write("Datos encontrados en Excel:", df_h_raw) 
+                st.info(f"No hay registros para hoy ({hoy_col})")
         else:
-            st.info("La pestaña de horarios está vacía en el Excel.")
+            st.info("La pestaña de horarios está vacía.")
 
 #fin pegado
 
