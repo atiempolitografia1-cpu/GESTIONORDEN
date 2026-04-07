@@ -402,15 +402,28 @@ if opcion == "Ventas":
 
         st.divider()
         st.markdown("### 📅 Registros de Hoy")
-        df_h_data = leer_datos("horarios") # Cambié el nombre a df_h_data para evitar conflictos
-        if not df_h_data.empty:
-            # Volvemos a calcular 'hoy' con la hora ajustada para filtrar bien
-            hoy_local = (datetime.now() - timedelta(hours=5)).strftime("%d/%m/%Y")
-            df_h_hoy = df_h_data[df_h_data['fecha'] == hoy_local]
+        
+        df_h_raw = leer_datos("horarios")
+        
+        if not df_h_raw.empty:
+            from datetime import timedelta
+            # Calculamos la fecha de hoy ajustada a Colombia
+            hoy_col = (datetime.now() - timedelta(hours=5)).strftime("%d/%m/%Y")
+            
+            # Limpiamos espacios en blanco por si acaso
+            df_h_raw['fecha'] = df_h_raw['fecha'].astype(str).str.strip()
+            
+            # Filtramos
+            df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_col]
+            
             if not df_h_hoy.empty:
                 st.dataframe(df_h_hoy[['empleado', 'evento', 'hora']], use_container_width=True, hide_index=True)
             else:
-                st.info("No hay registros de almuerzo hoy.")
+                st.info(f"No hay registros para hoy ({hoy_col}). Registra uno para probar.")
+                # Opcional: Descomenta la línea de abajo para ver todos los registros y depurar
+                # st.write("Datos encontrados en Excel:", df_h_raw) 
+        else:
+            st.info("La pestaña de horarios está vacía en el Excel.")
 
 #fin pegado
 
