@@ -72,22 +72,22 @@ def leer_datos(pestana):
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
             
         elif pestana == "caja":
-    cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-    df = df.iloc[:, :len(cols_caja)]
-    df.columns = cols_caja
+            cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+            df = df.iloc[:, :len(cols_caja)]
+            df.columns = cols_caja
     
     # 1. Asegurar que el valor sea número
-    df['valor_n'] = df['valor'].apply(a_numero)
+            df['valor_n'] = df['valor'].apply(a_numero)
     
     # 2. Convertir fecha con manejo de errores más limpio
     # Usamos format='mixed' si tienes versiones de pandas nuevas, o simplemente aseguramos el día primero
-    df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
     
     # 3. EL CAMBIO CLAVE: Eliminar filas donde la fecha falló para que no den error en el filtro
-    df = df.dropna(subset=['fecha_dt'])
+            df = df.dropna(subset=['fecha_dt'])
     
     # 4. Asegurar que 'solo_dia' sea un objeto date puro para comparar con el calendario
-    df['solo_dia'] = df['fecha_dt'].dt.date
+            df['solo_dia'] = df['fecha_dt'].dt.date
 
         elif pestana == "horarios":
             if not df.empty:
