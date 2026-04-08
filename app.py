@@ -116,9 +116,15 @@ if not st.session_state['autenticado']:
 
 # --- 4. INTERFAZ ---
 with st.sidebar:
+    # 1. Colocamos el logo al principio de la barra lateral
+    st.image("logo atiempo.png", use_container_width=True)
+    
+    # 2. Debajo aparecerá el nombre del usuario
     st.markdown(f"### 👤 {st.session_state['usuario'].upper()}")
+    
     menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
     opcion = st.radio("Menú:", menu)
+    
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state['autenticado'] = False
         st.rerun()
@@ -127,6 +133,7 @@ if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v_comp = leer_datos("ventas")
     
+    # ... resto de tu código de lógica de ventas
     if st.session_state['rol'] == 'admin':
         df_v = df_v_comp.copy()
     else:
