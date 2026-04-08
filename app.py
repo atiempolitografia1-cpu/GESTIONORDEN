@@ -1,12 +1,15 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta # Agregamos timedelta aquí
 import requests
 import io
 import re
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
+
+# VARIABLE GLOBAL PARA FECHA COLOMBIA (Soluciona el error de las 7:00 PM)
+fecha_hoy_col = (datetime.now() - timedelta(hours=5)).date()
 
 st.markdown("""
     <style>
@@ -35,7 +38,6 @@ URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzsd0qJS2AZP0TYPemtqEFX-uR
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
-    """Convierte un número a formato $ 1.234.567"""
     try:
         val = float(valor)
         return f"$ {val:,.0f}".replace(",", ".")
@@ -43,16 +45,15 @@ def formato_pesos(valor):
         return "$ 0"
 
 def a_numero(valor):
-    """Limpia el texto para convertirlo en número funcional"""
     try:
         if not valor: return 0.0
-        # Elimina símbolos de peso, puntos de miles y espacios
         s = re.sub(r'[^\d,]', '', str(valor)).replace(',', '.')
         return float(s) if s else 0.0
     except: return 0.0
 
 def leer_datos(pestana):
     try:
+        # Usamos microsegundos para evitar el caché de Google
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
@@ -64,28 +65,26 @@ def leer_datos(pestana):
             df['total_n'] = df['total'].apply(a_numero)
             df['abono_n'] = df['abono'].apply(a_numero)
             df['saldo_n'] = df['total_n'] - df['abono_n']
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], errors='coerce')
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
             df['solo_dia'] = df['fecha_dt'].dt.date
             
         elif pestana == "usuarios":
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
             
-        # --- NUEVO BLOQUE PARA LA PESTAÑA CAJA ---
         elif pestana == "caja":
             cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
             df = df.iloc[:, :len(cols_caja)]
             df.columns = cols_caja
-            
-            # Limpieza extrema de números
             df['valor_n'] = df['valor'].apply(a_numero)
-            
-            # Convertir fecha asegurando el formato día/mes/año
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
             df['solo_dia'] = df['fecha_dt'].dt.date
 
-        # ... (debajo de donde termina el elif de "caja")
         elif pestana == "horarios":
-            df.columns = ['fecha', 'empleado', 'evento', 'hora']
+            if not df.empty:
+                df = df.iloc[:, :4] # Forzamos solo las 4 columnas necesarias
+                df.columns = ['fecha', 'empleado', 'evento', 'hora']
+            else:
+                return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
             
         return df
     except: 
@@ -128,7 +127,6 @@ if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v_comp = leer_datos("ventas")
     
-    # --- FILTRO MAESTRO ---
     if st.session_state['rol'] == 'admin':
         df_v = df_v_comp.copy()
     else:
@@ -137,17 +135,18 @@ if opcion == "Ventas":
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': 
         t_labels.append("📊 Reportes Avanzados")
-        t_labels.append("⏰ Horarios") # Ahora solo entra si es admin
+        t_labels.append("⏰ Horarios") 
         
     tabs = st.tabs(t_labels)
-    
     
     # --- PESTAÑA REGISTRAR ---
     with tabs[0]:
         v = str(st.session_state.get('limp', 0)) 
         st.subheader("📝 Registrar Nueva Orden")
         c_f1, c_f2 = st.columns([1, 2])
-        fecha_manual = c_f1.date_input("📅 Fecha de la Orden", datetime.now().date())
+        # CAMBIO: Usamos fecha_hoy_col para evitar salto de día
+        fecha_manual = c_f1.date_input("📅 Fecha de la Orden", value=fecha_hoy_col)
+        
         c1, c2 = st.columns(2)
         ord = c1.text_input("N° Orden", value=st.session_state.get('n_ord_s', ""), key="or"+v)
         cli = c2.text_input("Cliente", key="cl"+v)
@@ -215,13 +214,16 @@ if opcion == "Ventas":
                     e_tot = a_numero(c6.text_input("Total ($ COP)", value=str(int(val['total_n'])), disabled=not es_admin))
                     e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
                     c_fecha_edit, c_met_edit = st.columns(2)
-                    fecha_abono_manual = c_fecha_edit.date_input("📅 Fecha de este abono", datetime.now().date())
+                    # CAMBIO: Usamos fecha_hoy_col
+                    fecha_abono_manual = c_fecha_edit.date_input("📅 Fecha de este abono", value=fecha_hoy_col)
                     e_met = c_met_edit.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
                     nuevo_abono_total = val['abono_n'] + e_nab
                     nuevo_saldo = e_tot - nuevo_abono_total
                     st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
-                    e_est = st.selectbox("Estado de la Orden", ["EN PROCESO", "TERMINADO", "ENTREGADO"], 
-                                       index=["EN PROCESO", "TERMINADO", "PAGADO"].index(val['estado']) if val['estado'] in ["EN PROCESO", "TERMINADO", "PAGADO"] else 0)
+                    
+                    estados_list = ["EN PROCESO", "TERMINADO", "ENTREGADO"]
+                    idx_est = estados_list.index(val['estado']) if val['estado'] in estados_list else 0
+                    e_est = st.selectbox("Estado de la Orden", estados_list, index=idx_est)
                     
                     if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
                         h_pago = val['historial_pagos']
@@ -245,18 +247,6 @@ if opcion == "Ventas":
                             st.success(f"✅ Orden actualizada.")
                             st.rerun()
 
-                if st.session_state['rol'] == 'admin':
-                    st.divider()
-                    with st.expander("🚨 ZONA DE PELIGRO - ELIMINAR ORDEN"):
-                        if st.button(f"🗑️ CONFIRMAR ELIMINAR ORDEN {sel}", use_container_width=True):
-                            if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": sel}):
-                                st.error(f"Orden {sel} eliminada")
-                                st.rerun()
-        else:
-            st.info("No hay órdenes disponibles.")
-
-    # --- PESTAÑA REPORTES (ADMIN) ---
-    # --- PESTAÑA REPORTES (ADMIN) ---
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
@@ -264,22 +254,18 @@ if opcion == "Ventas":
             df_caja = leer_datos("caja")
             
             c1, c2, c3 = st.columns(3)
-            f_ini = c1.date_input("📅 Desde", datetime.now().date(), key="f_ini_rep")
-            f_fin = c2.date_input("📅 Hasta", datetime.now().date(), key="f_fin_rep")
+            # CAMBIO: Usamos fecha_hoy_col
+            f_ini = c1.date_input("📅 Desde", value=fecha_hoy_col, key="f_ini_rep")
+            f_fin = c2.date_input("📅 Hasta", value=fecha_hoy_col, key="f_fin_rep")
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
 
-            # --- NUEVA SECCIÓN: CARTERA DEL DÍA ---
-            # Filtramos las ventas generales solo para el rango seleccionado
             df_v_dia = df_v_comp[(df_v_comp['solo_dia'] >= f_ini) & (df_v_comp['solo_dia'] <= f_fin)]
             if e_sel != "TODOS":
                 df_v_dia = df_v_dia[df_v_dia['empleado'] == e_sel]
             
             cartera_del_periodo = df_v_dia['saldo_n'].sum()
-            
-            # Mostramos un banner destacado con la cartera
             st.warning(f"### 🚩 Cartera del Periodo Seleccionado: {formato_pesos(cartera_del_periodo)}")
-            st.caption("Este es el valor total que los clientes aún deben de las ventas realizadas en estas fechas.")
             
             st.markdown("---")
             st.markdown("### 💰 Cuadre de Caja (Dinero Ingresado)")
@@ -290,34 +276,21 @@ if opcion == "Ventas":
                     df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
                 
                 g_efe, g_neq, g_ban, g_dav = 0.0, 0.0, 0.0, 0.0
-
                 for emp in df_c_fil['empleado'].unique():
-                    # ... (aquí sigue el resto de tu código de los expanders de empleados que pusimos antes)
                     with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
-                        
-                        # Cálculo individual por empleado
                         s_efe = df_emp[df_emp['metodo'] == "EFECTIVO"]['valor_n'].sum()
                         s_neq = df_emp[df_emp['metodo'] == "NEQUI"]['valor_n'].sum()
                         s_ban = df_emp[df_emp['metodo'] == "BANCOLOMBIA"]['valor_n'].sum()
                         s_dav = df_emp[df_emp['metodo'] == "DAVIPLATA"]['valor_n'].sum()
-                        
-                        # Mostrar métricas del empleado
                         col1.metric("💵 EFECTIVO", formato_pesos(s_efe))
                         col2.metric("📱 NEQUI", formato_pesos(s_neq))
                         col3.metric("🏦 BANCO", formato_pesos(s_ban))
                         col4.metric("📲 DAVIPLATA", formato_pesos(s_dav))
-                        
-                        # SUMAR AL TOTAL GLOBAL
-                        g_efe += s_efe
-                        g_neq += s_neq
-                        g_ban += s_ban
-                        g_dav += s_dav
-                        
+                        g_efe += s_efe; g_neq += s_neq; g_ban += s_ban; g_dav += s_dav
                         st.write(f"**Total de {emp}:** {formato_pesos(df_emp['valor_n'].sum())}")
 
-                # --- CUADRO DE GRAN TOTAL (Solo se muestra si seleccionas TODOS) ---
                 if e_sel == "TODOS" and not df_c_fil.empty:
                     st.divider()
                     st.markdown("### 🏆 RESUMEN TOTAL DE TODA LA TIENDA")
@@ -326,9 +299,7 @@ if opcion == "Ventas":
                     m2.info(f"**Total Nequi**\n\n{formato_pesos(g_neq)}")
                     m3.info(f"**Total Banco**\n\n{formato_pesos(g_ban)}")
                     m4.info(f"**Total Daviplata**\n\n{formato_pesos(g_dav)}")
-                    
-                    total_global = g_efe + g_neq + g_ban + g_dav
-                    st.success(f"## **RECAUDO TOTAL GLOBAL: {formato_pesos(total_global)}**")
+                    st.success(f"## **RECAUDO TOTAL GLOBAL: {formato_pesos(g_efe + g_neq + g_ban + g_dav)}**")
 
             st.divider()
             st.markdown("### 🔍 Buscador de Órdenes y Cartera")
@@ -337,110 +308,60 @@ if opcion == "Ventas":
             if not df_r.empty and 'solo_dia' in df_r.columns:
                 df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
                 if e_sel != "TODOS": df_r = df_r[df_r['empleado'] == e_sel]
-                
                 if "Pendientes" in filtro_pago: df_final = df_r[df_r['saldo_n'] > 0]
                 elif "Canceladas" in filtro_pago: df_final = df_r[df_r['saldo_n'] <= 0]
                 else: df_final = df_r.copy()
-
-                c_m1, c_m2, c_m3 = st.columns(3)
-                c_m1.metric("Valor Total Ventas", formato_pesos(df_final['total_n'].sum()))
-                c_m2.metric("Abonado (Historico)", formato_pesos(df_final['abono_n'].sum()))
-                c_m3.metric("Cartera (Deuda)", formato_pesos(df_final['saldo_n'].sum()), delta_color="inverse")
                 st.dataframe(df_final.sort_values('n_orden', ascending=False), use_container_width=True, hide_index=True)
 
+    # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS (SOLO ADMIN) ---
+    if st.session_state['rol'] == 'admin':
+        with tabs[3]: 
+            st.subheader("⏰ Control de Horarios de Almuerzo")
+            with st.container(border=True):
+                col1, col2 = st.columns(2)
+                emp_h = col1.selectbox("Seleccionar Empleado", df_users_db['nombre'].tolist(), key="sel_emp_almuerzo")
+                tipo_evento = col2.selectbox("Acción", ["Salida a Almuerzo 🍕", "Regreso de Almuerzo ✅"])
+                
+                if st.button("🚀 Registrar Hora Actual", use_container_width=True):
+                    ahora_local = datetime.now() - timedelta(hours=5) 
+                    datos_hora = {
+                        "accion": "guardar_almuerzo",
+                        "fecha": ahora_local.strftime("%d/%m/%Y"),
+                        "empleado": emp_h,
+                        "evento": tipo_evento,
+                        "hora": ahora_local.strftime("%I:%M:%S %p")
+                    }
+                    if enviar_google(datos_hora):
+                        st.success(f"✅ Registrado!")
+                        st.rerun() 
+
             st.divider()
-            with st.expander("🚨 SECCIÓN DE PELIGRO - MANTENIMIENTO"):
-                confirmar = st.checkbox("Entiendo que esta acción es irreversible")
-                if st.button("🔥 BORRAR TODO EL HISTORIAL", type="primary", disabled=not confirmar):
-                    if enviar_google({"accion": "limpiar_todo"}):
-                        st.success("✅ Sistema reseteado."); st.rerun()
-                        
-    # --- HISTORIAL FILTRADO ---
+            st.markdown("### 📅 Registros de Hoy")
+            df_h_raw = leer_datos("horarios")
+            if not df_h_raw.empty:
+                hoy_str = fecha_hoy_col.strftime("%d/%m/%Y")
+                df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_str].copy()
+                
+                if not df_h_hoy.empty:
+                    event = st.dataframe(df_h_hoy[['empleado', 'evento', 'hora']], 
+                                         use_container_width=True, on_select="rerun", selection_mode="single-row")
+                    selection = event.get("selection", {}).get("rows", [])
+                    if selection:
+                        fila_data = df_h_hoy.iloc[selection[0]]
+                        st.warning(f"¿Eliminar registro de **{fila_data['empleado']}**?")
+                        if st.button("🗑️ Confirmar Eliminación", type="primary"):
+                            if enviar_google({"accion": "eliminar_horario", "id_busqueda": fila_data['hora']}):
+                                st.success("Eliminado"); st.rerun()
+                else: st.info(f"Sin registros para hoy ({hoy_str})")
+
+    # --- HISTORIAL GENERAL (Visible para todos bajo las pestañas) ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
-    busq = st.text_input("🔍 Buscar:")
+    busq = st.text_input("🔍 Buscar Orden o Cliente:")
     df_h = df_v.copy()
     if busq:
         df_h = df_h[df_h['n_orden'].astype(str).str.contains(busq, case=False) | df_h['cliente'].astype(str).str.contains(busq, case=False)]
-    cols_h = ['fecha','n_orden','descripcion','cliente','total','abono','saldo','estado']
-    if st.session_state['rol'] == 'admin': cols_h.append('empleado')
-    st.dataframe(df_h[cols_h].iloc[::-1], use_container_width=True, hide_index=True)
-    
-    # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS (SOLO ADMIN) ---
-# Envolvemos TODO en esta condición de seguridad:
-if st.session_state['rol'] == 'admin':
-    
-    # El admin tiene 4 pestañas, por lo tanto el índice es 3
-    with tabs[3]: 
-        st.subheader("⏰ Control de Horarios de Almuerzo")
-        
-        with st.container(border=True):
-            col1, col2 = st.columns(2)
-            # Como solo entra el admin, siempre mostrará el selectbox de empleados
-            emp_h = col1.selectbox("Seleccionar Empleado", df_users_db['nombre'].tolist(), key="sel_emp_almuerzo")
-            tipo_evento = col2.selectbox("Acción", ["Salida a Almuerzo 🍕", "Regreso de Almuerzo ✅"])
-            
-            if st.button("🚀 Registrar Hora Actual", use_container_width=True):
-                from datetime import timedelta 
-                ahora_local = datetime.now() - timedelta(hours=5) 
-                
-                datos_hora = {
-                    "accion": "guardar_almuerzo",
-                    "fecha": ahora_local.strftime("%d/%m/%Y"),
-                    "empleado": emp_h,
-                    "evento": tipo_evento,
-                    "hora": ahora_local.strftime("%I:%M:%S %p")
-                }
-                
-                if enviar_google(datos_hora):
-                    st.success(f"✅ Registrado a las {ahora_local.strftime('%I:%M %p')}")
-                    st.balloons()
-                    st.rerun() 
-                else:
-                    st.error("❌ Error: Revisa la configuración de Google Script.")
-
-        st.divider()
-        st.markdown("### 📅 Registros de Hoy")
-        
-        df_h_raw = leer_datos("horarios")
-        
-        if not df_h_raw.empty:
-            from datetime import timedelta
-            hoy_col = (datetime.now() - timedelta(hours=5)).strftime("%d/%m/%Y")
-            df_h_raw['fecha'] = df_h_raw['fecha'].astype(str).str.strip()
-            df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_col].copy()
-            
-            if not df_h_hoy.empty:
-                event = st.dataframe(
-                    df_h_hoy[['empleado', 'evento', 'hora']], 
-                    use_container_width=True, 
-                    hide_index=False, 
-                    on_select="rerun",
-                    selection_mode="single-row"
-                )
-
-                selection = event.get("selection", {}).get("rows", [])
-                if selection:
-                    idx_seleccionado = selection[0]
-                    fila_data = df_h_hoy.iloc[idx_seleccionado]
-                    
-                    st.warning(f"¿Eliminar registro de **{fila_data['empleado']}** ({fila_data['evento']})?")
-                    
-                    if st.button("🗑️ Confirmar Eliminación", type="primary"):
-                        datos_eliminar = {
-                            "accion": "eliminar_horario",
-                            "id_busqueda": fila_data['hora'],
-                            "tipo_registro": "horarios"
-                        }
-                        
-                        if enviar_google(datos_eliminar):
-                            st.success("Registro eliminado correctamente")
-                            st.rerun()
-            else:
-                st.info(f"No hay registros para hoy ({hoy_col})")
-        else:
-            st.info("La pestaña de horarios está vacía.")
-#fin pegado
+    st.dataframe(df_h[['fecha','n_orden','descripcion','cliente','total','abono','saldo','estado']].iloc[::-1], use_container_width=True, hide_index=True)
 
 elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
@@ -453,9 +374,8 @@ elif opcion == "Gestión de Empleados":
             n_cla = st.text_input("Contraseña")
             n_rol = st.selectbox("Rol", ["empleado", "admin"])
             if st.form_submit_button("Registrar en el Sistema"):
-                if n_nom and n_cla:
-                    if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
-                        st.success(f"¡{n_nom} registrado!"); st.rerun()
+                if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
+                    st.success("Registrado"); st.rerun()
     
     with t2:
         if not df_u.empty:
@@ -464,10 +384,6 @@ elif opcion == "Gestión de Empleados":
             with st.form("edit_emp"):
                 e_cla = st.text_input("Nueva Contraseña", value=datos_u['clave'])
                 e_rol = st.selectbox("Rol", ["empleado", "admin"], index=0 if datos_u['rol'] == 'empleado' else 1)
-                c1, c2 = st.columns(2)
-                if c1.form_submit_button("ACTUALIZAR DATOS"):
+                if st.form_submit_button("ACTUALIZAR DATOS"):
                     if enviar_google({"accion": "actualizar", "tipo_registro": "usuarios", "id_busqueda": u_sel, "clave": e_cla, "rol": e_rol}):
-                        st.success("Datos actualizados"); st.rerun()
-                if u_sel != st.session_state['usuario'] and c2.form_submit_button("⚠️ ELIMINAR ACCESO"):
-                    if enviar_google({"accion": "eliminar", "tipo_registro": "usuarios", "id_busqueda": u_sel}):
-                        st.warning("Usuario eliminado"); st.rerun()
+                        st.success("Actualizado"); st.rerun()
