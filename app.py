@@ -366,25 +366,22 @@ if opcion == "Ventas":
     if st.session_state['rol'] == 'admin': cols_h.append('empleado')
     st.dataframe(df_h[cols_h].iloc[::-1], use_container_width=True, hide_index=True)
     
-    # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS ---
-    idx_horario = 3 if st.session_state['rol'] == 'admin' else 2
+    # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS (SOLO ADMIN) ---
+# Envolvemos TODO en esta condición de seguridad:
+if st.session_state['rol'] == 'admin':
     
-    with tabs[idx_horario]: 
+    # El admin tiene 4 pestañas, por lo tanto el índice es 3
+    with tabs[3]: 
         st.subheader("⏰ Control de Horarios de Almuerzo")
         
         with st.container(border=True):
             col1, col2 = st.columns(2)
-            if st.session_state['rol'] == 'admin':
-                emp_h = col1.selectbox("Seleccionar Empleado", df_users_db['nombre'].tolist(), key="sel_emp_almuerzo")
-            else:
-                emp_h = st.session_state['usuario']
-                col1.info(f"Registrando para: **{emp_h}**")
-            
+            # Como solo entra el admin, siempre mostrará el selectbox de empleados
+            emp_h = col1.selectbox("Seleccionar Empleado", df_users_db['nombre'].tolist(), key="sel_emp_almuerzo")
             tipo_evento = col2.selectbox("Acción", ["Salida a Almuerzo 🍕", "Regreso de Almuerzo ✅"])
             
             if st.button("🚀 Registrar Hora Actual", use_container_width=True):
-                from datetime import timedelta # Importante para la hora
-                # Ajuste de hora: Streamlit Cloud usa UTC. Restamos 5 horas para Colombia.
+                from datetime import timedelta 
                 ahora_local = datetime.now() - timedelta(hours=5) 
                 
                 datos_hora = {
@@ -398,7 +395,7 @@ if opcion == "Ventas":
                 if enviar_google(datos_hora):
                     st.success(f"✅ Registrado a las {ahora_local.strftime('%I:%M %p')}")
                     st.balloons()
-                    st.rerun() # Para que aparezca en la tabla de abajo de una vez
+                    st.rerun() 
                 else:
                     st.error("❌ Error: Revisa la configuración de Google Script.")
 
@@ -414,26 +411,22 @@ if opcion == "Ventas":
             df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_col].copy()
             
             if not df_h_hoy.empty:
-                # Mostramos la tabla con selección habilitada
                 event = st.dataframe(
                     df_h_hoy[['empleado', 'evento', 'hora']], 
                     use_container_width=True, 
-                    hide_index=False, # Necesitamos el índice para saber qué borrar
+                    hide_index=False, 
                     on_select="rerun",
                     selection_mode="single-row"
                 )
 
-                # Si hay una fila seleccionada, mostramos el botón de eliminar
                 selection = event.get("selection", {}).get("rows", [])
                 if selection:
                     idx_seleccionado = selection[0]
-                    # Obtenemos los datos de la fila para confirmar
                     fila_data = df_h_hoy.iloc[idx_seleccionado]
                     
                     st.warning(f"¿Eliminar registro de **{fila_data['empleado']}** ({fila_data['evento']})?")
                     
                     if st.button("🗑️ Confirmar Eliminación", type="primary"):
-                        # El ID de búsqueda será la HORA (ya que es lo más único que tenemos en esa tabla)
                         datos_eliminar = {
                             "accion": "eliminar_horario",
                             "id_busqueda": fila_data['hora'],
@@ -447,7 +440,6 @@ if opcion == "Ventas":
                 st.info(f"No hay registros para hoy ({hoy_col})")
         else:
             st.info("La pestaña de horarios está vacía.")
-
 #fin pegado
 
 elif opcion == "Gestión de Empleados":
