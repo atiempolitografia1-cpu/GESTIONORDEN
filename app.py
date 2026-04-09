@@ -263,8 +263,7 @@ if opcion == "Ventas":
                                 enviar_google(p_caja_nuevo)
                             st.success(f"✅ Orden actualizada.")
                             st.rerun()
-
-    # --- NUEVO: BOTÓN DE ELIMINAR (SOLO ADMIN) ---
+                            # --- NUEVO: BOTÓN DE ELIMINAR (SOLO ADMIN) ---
                     if st.session_state.get('rol') == 'admin':
                         st.divider()
                         with st.expander("🗑️ Zona de Peligro"):
