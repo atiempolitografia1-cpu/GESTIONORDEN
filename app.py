@@ -264,6 +264,19 @@ if opcion == "Ventas":
                             st.success(f"✅ Orden actualizada.")
                             st.rerun()
 
+    # --- NUEVO: BOTÓN DE ELIMINAR (SOLO ADMIN) ---
+                    if st.session_state.get('rol') == 'admin':
+                        st.divider()
+                        with st.expander("🗑️ Zona de Peligro"):
+                            st.warning(f"¿Estás seguro de eliminar permanentemente la orden {sel}?")
+                            if st.button(f"CONFIRMAR ELIMINACIÓN DE {sel}", type="primary", use_container_width=True):
+                                # Enviamos la acción al Script de Google
+                                if enviar_google({"accion": "eliminar_orden", "id_busqueda": sel}):
+                                    st.success(f"✅ Orden {sel} eliminada correctamente")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ No se pudo eliminar la orden. Revisa el Script de Google.")
+
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
