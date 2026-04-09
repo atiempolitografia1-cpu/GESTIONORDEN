@@ -75,20 +75,20 @@ def leer_datos(pestana):
             cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
             df = df.iloc[:, :len(cols_caja)]
             df.columns = cols_caja
-    
-    # 1. Asegurar que el valor sea número
+            
+            # Aseguramos que el valor sea numérico
             df['valor_n'] = df['valor'].apply(a_numero)
-    
-    # 2. Convertir fecha con manejo de errores más limpio
-    # Usamos format='mixed' si tienes versiones de pandas nuevas, o simplemente aseguramos el día primero
+            
+            # Convertimos la fecha. IMPORTANTE: dayfirst=True para formato DD/MM/YYYY
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-    
-    # 3. EL CAMBIO CLAVE: Eliminar filas donde la fecha falló para que no den error en el filtro
+            
+            # Eliminamos filas con fechas rotas
             df = df.dropna(subset=['fecha_dt'])
-    
-    # 4. Asegurar que 'solo_dia' sea un objeto date puro para comparar con el calendario
+            
+            # FORZAMOS el formato de fecha pura (sin horas) para comparar con date_input
             df['solo_dia'] = df['fecha_dt'].dt.date
 
+        
         elif pestana == "horarios":
             if not df.empty:
                 df = df.iloc[:, :4] # Forzamos solo las 4 columnas necesarias
@@ -297,10 +297,12 @@ if opcion == "Ventas":
                     with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
-                        s_efe = df_emp[df_emp['metodo'].str.contains("EFECTIVO", case=False, na=False)]['valor_n'].sum()
-                        s_neq = df_emp[df_emp['metodo'].str.contains("NEQUI", case=False, na=False)]['valor_n'].sum()
-                        s_ban = df_emp[df_emp['metodo'].str.contains("BANCOLOMBIA", case=False, na=False)]['valor_n'].sum()
-                        s_dav = df_emp[df_emp['metodo'].str.contains("DAVIPLATA", case=False, na=False)]['valor_n'].sum()
+                        # Usamos .str.strip() para borrar espacios y .str.upper() para mayúsculas
+                        s_efe = df_emp[df_emp['metodo'].str.upper().str.strip() == "EFECTIVO"]['valor_n'].sum()
+                        s_neq = df_emp[df_emp['metodo'].str.upper().str.strip() == "NEQUI"]['valor_n'].sum()
+                        s_ban = df_emp[df_emp['metodo'].str.upper().str.strip() == "BANCOLOMBIA"]['valor_n'].sum()
+                        s_dav = df_emp[df_emp['metodo'].str.upper().str.strip() == "DAVIPLATA"]['valor_n'].sum()
+                        
                         col1.metric("💵 EFECTIVO", formato_pesos(s_efe))
                         col2.metric("📱 NEQUI", formato_pesos(s_neq))
                         col3.metric("🏦 BANCO", formato_pesos(s_ban))
