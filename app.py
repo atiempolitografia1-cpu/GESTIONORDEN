@@ -297,11 +297,11 @@ if opcion == "Ventas":
                     with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
-                        # Usamos .str.strip() para borrar espacios y .str.upper() para mayúsculas
-                        s_efe = df_emp[df_emp['metodo'].str.upper().str.strip() == "EFECTIVO"]['valor_n'].sum()
-                        s_neq = df_emp[df_emp['metodo'].str.upper().str.strip() == "NEQUI"]['valor_n'].sum()
-                        s_ban = df_emp[df_emp['metodo'].str.upper().str.strip() == "BANCOLOMBIA"]['valor_n'].sum()
-                        s_dav = df_emp[df_emp['metodo'].str.upper().str.strip() == "DAVIPLATA"]['valor_n'].sum()
+                        # Forzamos la columna a String (Texto) antes de limpiar y comparar
+                        s_efe = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "EFECTIVO"]['valor_n'].sum()
+                        s_neq = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "NEQUI"]['valor_n'].sum()
+                        s_ban = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "BANCOLOMBIA"]['valor_n'].sum()
+                        s_dav = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "DAVIPLATA"]['valor_n'].sum()
                         
                         col1.metric("💵 EFECTIVO", formato_pesos(s_efe))
                         col2.metric("📱 NEQUI", formato_pesos(s_neq))
