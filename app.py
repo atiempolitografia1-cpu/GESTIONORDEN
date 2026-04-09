@@ -297,10 +297,10 @@ if opcion == "Ventas":
                     with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
-                        s_efe = df_emp[df_emp['metodo'] == "EFECTIVO"]['valor_n'].sum()
-                        s_neq = df_emp[df_emp['metodo'] == "NEQUI"]['valor_n'].sum()
-                        s_ban = df_emp[df_emp['metodo'] == "BANCOLOMBIA"]['valor_n'].sum()
-                        s_dav = df_emp[df_emp['metodo'] == "DAVIPLATA"]['valor_n'].sum()
+                        s_efe = df_emp[df_emp['metodo'].str.contains("EFECTIVO", case=False, na=False)]['valor_n'].sum()
+                        s_neq = df_emp[df_emp['metodo'].str.contains("NEQUI", case=False, na=False)]['valor_n'].sum()
+                        s_ban = df_emp[df_emp['metodo'].str.contains("BANCOLOMBIA", case=False, na=False)]['valor_n'].sum()
+                        s_dav = df_emp[df_emp['metodo'].str.contains("DAVIPLATA", case=False, na=False)]['valor_n'].sum()
                         col1.metric("💵 EFECTIVO", formato_pesos(s_efe))
                         col2.metric("📱 NEQUI", formato_pesos(s_neq))
                         col3.metric("🏦 BANCO", formato_pesos(s_ban))
