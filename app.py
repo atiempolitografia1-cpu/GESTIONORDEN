@@ -253,6 +253,8 @@ if opcion == "Ventas":
                             "descripcion": e_desc, "total": float(e_tot), "abono": float(nuevo_abono_total),
                             "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
                         }
+                        
+                        # ... (vienes del código anterior)
                         if enviar_google(payload):
                             if e_nab > 0:
                                 p_caja_nuevo = {
@@ -263,18 +265,24 @@ if opcion == "Ventas":
                                 enviar_google(p_caja_nuevo)
                             st.success(f"✅ Orden actualizada.")
                             st.rerun()
-                            # --- NUEVO: BOTÓN DE ELIMINAR (SOLO ADMIN) ---
-                    if st.session_state.get('rol') == 'admin':
-                        st.divider()
-                        with st.expander("🗑️ Zona de Peligro"):
-                            st.warning(f"¿Estás seguro de eliminar permanentemente la orden {sel}?")
-                            if st.button(f"CONFIRMAR ELIMINACIÓN DE {sel}", type="primary", use_container_width=True):
-                                # Enviamos la acción al Script de Google
-                                if enviar_google({"accion": "eliminar_orden", "id_busqueda": sel}):
-                                    st.success(f"✅ Orden {sel} eliminada correctamente")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ No se pudo eliminar la orden. Revisa el Script de Google.")
+
+                # --- NUEVO: BOTÓN ELIMINAR (FUERA DEL FORMULARIO) ---
+                if st.session_state.get('rol') == 'admin':
+                    st.divider()
+                    with st.expander("🗑️ Zona de Peligro"):
+                        st.error(f"¡Atención! Se eliminará la orden **{sel}** de Ventas y de la Caja.")
+                        if st.button(f"ELIMINAR ORDEN {sel}", type="primary", use_container_width=True):
+                            payload_delete = {
+                                "accion": "eliminar", 
+                                "tipo_registro": "ventas", 
+                                "id_busqueda": sel
+                            }
+                            if enviar_google(payload_delete):
+                                st.success(f"✅ Orden {sel} eliminada correctamente.")
+                                st.rerun()
+                            else:
+                                st.error("❌ Error al conectar con el servidor.")
+                        
 
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
