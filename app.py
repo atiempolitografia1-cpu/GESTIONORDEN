@@ -49,12 +49,25 @@ def generar_recibo_pdf(datos):
     pdf = FPDF(orientation='P', unit='mm', format='A5')
     pdf.add_page()
     
+    # --- LOGO (Nombre exacto de tu archivo) ---
+    try:
+        # Usamos el nombre exacto de tu captura: 'logo atiempo.png'
+        pdf.image('logo atiempo.png', 10, 10, 35) 
+    except Exception as e:
+        # Si algo falla con el logo, no detiene el programa
+        print(f"Error cargando logo: {e}")
+    
     # --- Encabezado ---
+    # Empujamos el texto a la derecha (45mm) para dejar espacio al logo
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "RECIBO DE CAJA", ln=True, align="C")
+    pdf.set_x(50) 
+    pdf.cell(0, 10, "RECIBO DE CAJA", ln=True, align="L")
+    
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 5, "LITOGRAFIA ATIEMPO SAS", ln=True, align="C")
-    pdf.ln(5)
+    pdf.set_x(50)
+    pdf.cell(0, 5, "ATIEMPO IMPRESORES", ln=True, align="L")
+    
+    pdf.ln(12) # Espacio extra para bajar y que no se pegue al logo
     
     # --- Datos del Cliente ---
     pdf.set_font("Arial", "", 10)
@@ -62,6 +75,9 @@ def generar_recibo_pdf(datos):
     pdf.cell(0, 7, f"Cliente: {datos['cliente']}", ln=True)
     pdf.cell(0, 7, f"Fecha: {datos['fecha']}", ln=True)
     pdf.ln(5)
+
+    # ... (Sigue el resto de tu código de la tabla de conceptos y resumen) ...
+    # Asegúrate de mantener la parte final de: return bytes(pdf.output())
     
     # --- Tabla de Conceptos (CON DESCRIPCIÓN) ---
     pdf.set_fill_color(230, 230, 230)
