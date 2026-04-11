@@ -49,46 +49,57 @@ def generar_recibo_pdf(datos):
     pdf = FPDF(orientation='P', unit='mm', format='A5')
     pdf.add_page()
     
-    # Encabezado
+    # --- Encabezado ---
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECIBO DE CAJA", ln=True, align="C")
     pdf.set_font("Arial", "B", 10)
     pdf.cell(0, 5, "ATIEMPO IMPRESORES", ln=True, align="C")
     pdf.ln(5)
     
-    # Datos básicos
+    # --- Datos del Cliente ---
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 7, f"Comprobante: RC-{datos['n_orden']}", ln=True)
     pdf.cell(0, 7, f"Cliente: {datos['cliente']}", ln=True)
     pdf.cell(0, 7, f"Fecha: {datos['fecha']}", ln=True)
     pdf.ln(5)
     
-    # Tabla de Abono Actual
+    # --- Tabla de Conceptos (CON DESCRIPCIÓN) ---
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(90, 8, "CONCEPTO", 1, 0, "C", True)
+    pdf.cell(90, 8, "CONCEPTO / DESCRIPCIÓN", 1, 0, "C", True)
     pdf.cell(35, 8, "VALOR", 1, 1, "C", True)
     
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(90, 10, f"Abono realizado hoy", 1)
-    pdf.cell(35, 10, f"{formato_pesos(datos['abono_hoy'])}", 1, 1, "R")
+    pdf.set_font("Arial", "", 9)
+    # Combinamos el texto del abono con la descripción del trabajo
+    texto_concepto = f"Abono a orden N° {datos['n_orden']}\nTrabajo: {datos.get('descripcion', 'N/A')}"
     
-    # --- NUEVO: SECCIÓN DE HISTORIAL ---
+    # Usamos multi_cell para que si la descripción es larga, salte de línea automáticamente
+    x_actual = pdf.get_x()
+    y_actual = pdf.get_y()
+    pdf.multi_cell(90, 7, texto_concepto, 1, "L")
+    
+    # Colocamos el valor al lado de la celda de descripción
+    pdf.set_xy(x_actual + 90, y_actual)
+    # Calculamos la altura que tomó la multi_cell para que el cuadro del valor coincida
+    altura_celda = pdf.get_y() - y_actual if pdf.get_y() - y_actual > 10 else 10
+    pdf.set_xy(x_actual + 90, y_actual)
+    pdf.cell(35, altura_celda, f"{formato_pesos(datos['abono_hoy'])}", 1, 1, "R")
+    
+    # --- Historial de Pagos ---
     if 'historial_pagos' in datos and datos['historial_pagos']:
         pdf.ln(3)
         pdf.set_font("Arial", "B", 9)
-        pdf.cell(0, 5, "Resumen de todos los pagos realizados:", ln=True)
+        pdf.cell(0, 5, "Historial de abonos:", ln=True)
         pdf.set_font("Arial", "I", 8)
-        # Esto escribe el historial completo (fechas y montos anteriores)
         pdf.multi_cell(0, 5, datos['historial_pagos'].replace("|", "\n"), align="L")
     
-    # Resumen Financiero
+    # --- Resumen Financiero ---
     pdf.ln(5)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(90, 7, "VALOR TOTAL DE LA ORDEN:", 0, 0, "R")
     pdf.cell(35, 7, f"{formato_pesos(datos['total'])}", 0, 1, "R")
     
-    pdf.cell(90, 7, "TOTAL ABONADO A LA FECHA:", 0, 0, "R")
+    pdf.cell(90, 7, "TOTAL ABONADO:", 0, 0, "R")
     pdf.cell(35, 7, f"{formato_pesos(datos['total_abonado'])}", 0, 1, "R")
     
     pdf.set_font("Arial", "B", 11)
@@ -97,7 +108,7 @@ def generar_recibo_pdf(datos):
     
     pdf.ln(10)
     pdf.set_font("Arial", "I", 8)
-    pdf.multi_cell(0, 5, "Este documento es un soporte interno de pago.", align="C")
+    pdf.multi_cell(0, 5, "Soporte interno de pago - Atiempo Impresores", align="C")
     
     return bytes(pdf.output())
         
@@ -275,6 +286,7 @@ if opcion == "Ventas":
                         "total": float(tot),
                         "total_abonado": float(abo),
                         "saldo_pendiente": float(tot - abo),
+                        "descripcion": desc,
                         "historial_pagos": historial_inicial
                     }
                     
@@ -378,6 +390,7 @@ if opcion == "Ventas":
                                 "total": e_tot,
                                 "total_abonado": nuevo_abono_total,
                                 "saldo_pendiente": nuevo_saldo,
+                                "descripcion": desc,
                                 "historial_pagos": h_pago  # <--- Pasamos el historial acumulado
                             }
                             
