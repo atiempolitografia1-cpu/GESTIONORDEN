@@ -390,7 +390,7 @@ if opcion == "Ventas":
                                 "total": e_tot,
                                 "total_abonado": nuevo_abono_total,
                                 "saldo_pendiente": nuevo_saldo,
-                                "descripcion": desc,
+                                "descripcion": e_desc,
                                 "historial_pagos": h_pago  # <--- Pasamos el historial acumulado
                             }
                             
