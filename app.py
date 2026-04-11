@@ -293,9 +293,9 @@ if opcion == "Ventas":
                     e_tot = a_numero(c6.text_input("Total ($ COP)", value=str(int(val['total_n'])), disabled=not es_admin))
                     e_nab = a_numero(c7.text_input("Añadir nuevo abono ($ COP)", value="0"))
                     c_fecha_edit, c_met_edit = st.columns(2)
-                    # CAMBIO: Usamos fecha_hoy_col
                     fecha_abono_manual = c_fecha_edit.date_input("📅 Fecha de este abono", value=fecha_hoy_col)
                     e_met = c_met_edit.selectbox("Medio del nuevo abono", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
+                    
                     nuevo_abono_total = val['abono_n'] + e_nab
                     nuevo_saldo = e_tot - nuevo_abono_total
                     st.warning(f"Saldo actual: {formato_pesos(val['saldo_n'])} | **Nuevo Saldo: {formato_pesos(nuevo_saldo)}**")
@@ -304,11 +304,15 @@ if opcion == "Ventas":
                     idx_est = estados_list.index(val['estado']) if val['estado'] in estados_list else 0
                     e_est = st.selectbox("Estado de la Orden", estados_list, index=idx_est)
                     
-                    if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
+                    # BOTÓN DE ENVÍO DEL FORMULARIO
+                    btn_actualizar = st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True)
+
+                    if btn_actualizar:
                         h_pago = val['historial_pagos']
                         f_abono_str = fecha_abono_manual.strftime('%d/%m/%Y')
                         if e_nab > 0:
                             h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {f_abono_str}"
+                        
                         payload = {
                             "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": sel,
                             "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
@@ -316,7 +320,6 @@ if opcion == "Ventas":
                             "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
                         }
                         
-                        # ... (vienes del código anterior)
                         if enviar_google(payload):
                             if e_nab > 0:
                                 p_caja_nuevo = {
@@ -325,34 +328,39 @@ if opcion == "Ventas":
                                     "empleado": str(st.session_state['usuario'])
                                 }
                                 enviar_google(p_caja_nuevo)
-                            st.success(f"✅ Orden actualizada.")
-                            # --- GENERACIÓN DEL RECIBO ---
-                            datos_recibo = {
-                                "n_orden": sel,
-                                "cliente": e_cli,
-                                "nit": e_nit,
-                                "fecha": f_abono_str,
-                                "abono_hoy": e_nab,
-                                "total": e_tot,
-                                "total_abonado": nuevo_abono_total,
+                            
+                            # GUARDAMOS EN SESIÓN PARA MOSTRAR EL PDF AFUERA
+                            st.session_state['ultimo_recibo'] = {
+                                "n_orden": sel, "cliente": e_cli, "nit": e_nit, "fecha": f_abono_str,
+                                "abono_hoy": e_nab, "total": e_tot, "total_abonado": nuevo_abono_total,
                                 "saldo_pendiente": nuevo_saldo
                             }
-                            
-                            pdf_recibo = generar_recibo_pdf(datos_recibo)
-                            
-                            st.download_button(
-                                label="📥 DESCARGAR RECIBO DE CAJA (PDF)",
-                                data=pdf_recibo,
-                                file_name=f"Recibo_{sel}.pdf",
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                            
-                            # Quitamos el st.rerun() automático para que te dé tiempo de descargar el PDF
-                            if st.button("Finalizar y Volver"):
-                                st.rerun()
+                            st.success(f"✅ Orden {sel} actualizada.")
+                            st.rerun()
 
-                # --- NUEVO: BOTÓN ELIMINAR (FUERA DEL FORMULARIO) ---
+                # --- FUERA DEL FORMULARIO: BOTÓN DE DESCARGA ---
+                if 'ultimo_recibo' in st.session_state:
+                    dat = st.session_state['ultimo_recibo']
+                    st.divider()
+                    st.info(f"📄 Recibo de Caja generado para la orden {dat['n_orden']}")
+                    
+                    # Generamos el PDF con la función que ya creaste
+                    pdf_bytes = generar_recibo_pdf(dat)
+                    
+                    col_down, col_limpiar = st.columns([3, 1])
+                    col_down.download_button(
+                        label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
+                        data=pdf_bytes,
+                        file_name=f"Recibo_{dat['n_orden']}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="primary"
+                    )
+                    if col_limpiar.button("✖️ Quitar Recibo"):
+                        del st.session_state['ultimo_recibo']
+                        st.rerun()
+
+                # --- BOTÓN ELIMINAR (SOLO ADMIN) ---
                 if st.session_state.get('rol') == 'admin':
                     st.divider()
                     with st.expander("🗑️ Zona de Peligro"):
@@ -364,11 +372,8 @@ if opcion == "Ventas":
                                 "id_busqueda": sel
                             }
                             if enviar_google(payload_delete):
-                                st.success(f"✅ Orden {sel} eliminada correctamente.")
+                                st.success(f"✅ Orden {sel} eliminada.")
                                 st.rerun()
-                            else:
-                                st.error("❌ Error al conectar con el servidor.")
-                        
 
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
