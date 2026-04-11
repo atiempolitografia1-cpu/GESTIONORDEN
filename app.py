@@ -350,7 +350,7 @@ if opcion == "Ventas":
                             
                             # Quitamos el st.rerun() automático para que te dé tiempo de descargar el PDF
                             if st.button("Finalizar y Volver"):
-                            st.rerun()
+                                st.rerun()
 
                 # --- NUEVO: BOTÓN ELIMINAR (FUERA DEL FORMULARIO) ---
                 if st.session_state.get('rol') == 'admin':
