@@ -103,7 +103,7 @@ def generar_recibo_pdf(datos):
     pdf.multi_cell(0, 5, "Este documento es un soporte contable de carácter interno. No representa una factura electrónica de venta según la normativa vigente.", align="C")
     
     # Retornar el PDF como bytes (importante para Streamlit)
-    return pdf.output(dest='S')
+    return bytes(pdf.output())
         
 
 def a_numero(valor):
