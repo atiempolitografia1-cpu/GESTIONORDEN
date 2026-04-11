@@ -372,40 +372,46 @@ if opcion == "Ventas":
                                 }
                                 enviar_google(p_caja_nuevo)
                             
-                            # GUARDAMOS DATOS EN SESSION_STATE PARA EL PDF
-                            st.session_state['pdf_data'] = {
-                                "n_orden": sel, "cliente": e_cli, "nit": e_nit,
-                                "fecha": f_abono_str, "abono_hoy": e_nab, "total": e_tot,
-                                "total_abonado": nuevo_abono_total, "saldo_pendiente": nuevo_saldo
+                            # --- ESTO ES LO QUE CAMBIA: GUARDAR TODO EL HISTORIAL ---
+                            st.session_state['pdf_edicion'] = {
+                                "n_orden": sel,
+                                "cliente": e_cli,
+                                "nit": e_nit,
+                                "fecha": f_abono_str,
+                                "abono_hoy": e_nab,
+                                "total": e_tot,
+                                "total_abonado": nuevo_abono_total,
+                                "saldo_pendiente": nuevo_saldo,
+                                "historial_pagos": h_pago  # <--- Pasamos el historial acumulado
                             }
-                            st.success("✅ Orden actualizada.")
+                            
+                            st.success(f"✅ Orden {sel} actualizada.")
                             st.rerun()
 
-                # 2. EL BOTÓN DE PDF (FUERA DEL FORMULARIO)
-                # Esta parte tiene menos sangría (un nivel menos que el form)
-                if 'pdf_data' in st.session_state:
-                    dat = st.session_state['pdf_data']
+                # --- BOTÓN DE DESCARGA (FUERA DEL FORMULARIO) ---
+                if 'pdf_edicion' in st.session_state:
+                    dat = st.session_state['pdf_edicion']
                     st.divider()
-                    st.info(f"📄 Recibo de Caja generado para la orden {dat['n_orden']}")
+                    st.info(f"📄 Recibo de Abono disponible: {dat['n_orden']}")
                     
-                    # Generamos los bytes del PDF
                     try:
-                        pdf_bytes = generar_recibo_pdf(dat)
+                        archivo_pdf = generar_recibo_pdf(dat)
                         
-                        col_pdf, col_cerrar = st.columns([3, 1])
-                        col_pdf.download_button(
-                            label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
-                            data=pdf_bytes,
-                            file_name=f"Recibo_{dat['n_orden']}.pdf",
+                        col_d, col_l = st.columns([3, 1])
+                        col_d.download_button(
+                            label=f"📥 DESCARGAR RECIBO DE ABONO",
+                            data=archivo_pdf,
+                            file_name=f"Recibo_Abono_{dat['n_orden']}.pdf",
                             mime="application/pdf",
                             use_container_width=True,
                             type="primary"
                         )
-                        if col_cerrar.button("✖️ Quitar"):
-                            del st.session_state['pdf_data']
+                        
+                        if col_l.button("✖️ Finalizar", key="limp_edit"):
+                            del st.session_state['pdf_edicion']
                             st.rerun()
                     except Exception as e:
-                        st.error(f"Error al generar el PDF: {e}")
+                        st.error(f"Error al generar el recibo: {e}")
 
                 # 3. ZONA DE PELIGRO (TAMBIÉN FUERA DEL FORM)
                 if st.session_state.get('rol') == 'admin':
