@@ -278,6 +278,7 @@ if opcion == "Ventas":
                 val = df_v[df_v['n_orden'] == sel].iloc[0]
                 st.info(f"Orden: **{sel}** | Registrada por: **{val['empleado']}**")
                 
+                # 1. EL FORMULARIO (Solo para capturar datos y actualizar)
                 with st.form("f_edicion_pro"):
                     c1, c2 = st.columns(2)
                     e_cli = c1.text_input("Cliente", value=val['cliente'])
@@ -304,10 +305,9 @@ if opcion == "Ventas":
                     idx_est = estados_list.index(val['estado']) if val['estado'] in estados_list else 0
                     e_est = st.selectbox("Estado de la Orden", estados_list, index=idx_est)
                     
-                    # BOTÓN DE ENVÍO DEL FORMULARIO
-                    btn_actualizar = st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True)
+                    submit = st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True)
 
-                    if btn_actualizar:
+                    if submit:
                         h_pago = val['historial_pagos']
                         f_abono_str = fecha_abono_manual.strftime('%d/%m/%Y')
                         if e_nab > 0:
@@ -329,52 +329,50 @@ if opcion == "Ventas":
                                 }
                                 enviar_google(p_caja_nuevo)
                             
-                            # GUARDAMOS EN SESIÓN PARA MOSTRAR EL PDF AFUERA
-                            st.session_state['ultimo_recibo'] = {
-                                "n_orden": sel, "cliente": e_cli, "nit": e_nit, "fecha": f_abono_str,
-                                "abono_hoy": e_nab, "total": e_tot, "total_abonado": nuevo_abono_total,
-                                "saldo_pendiente": nuevo_saldo
+                            # GUARDAMOS DATOS EN SESSION_STATE PARA EL PDF
+                            st.session_state['pdf_data'] = {
+                                "n_orden": sel, "cliente": e_cli, "nit": e_nit,
+                                "fecha": f_abono_str, "abono_hoy": e_nab, "total": e_tot,
+                                "total_abonado": nuevo_abono_total, "saldo_pendiente": nuevo_saldo
                             }
-                            st.success(f"✅ Orden {sel} actualizada.")
+                            st.success("✅ Orden actualizada.")
                             st.rerun()
 
-                # --- FUERA DEL FORMULARIO: BOTÓN DE DESCARGA ---
-                if 'ultimo_recibo' in st.session_state:
-                    dat = st.session_state['ultimo_recibo']
+                # 2. EL BOTÓN DE PDF (FUERA DEL FORMULARIO)
+                # Esta parte tiene menos sangría (un nivel menos que el form)
+                if 'pdf_data' in st.session_state:
+                    dat = st.session_state['pdf_data']
                     st.divider()
                     st.info(f"📄 Recibo de Caja generado para la orden {dat['n_orden']}")
                     
-                    # Generamos el PDF con la función que ya creaste
-                    pdf_bytes = generar_recibo_pdf(dat)
-                    
-                    col_down, col_limpiar = st.columns([3, 1])
-                    col_down.download_button(
-                        label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
-                        data=pdf_bytes,
-                        file_name=f"Recibo_{dat['n_orden']}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        type="primary"
-                    )
-                    if col_limpiar.button("✖️ Quitar Recibo"):
-                        del st.session_state['ultimo_recibo']
-                        st.rerun()
+                    # Generamos los bytes del PDF
+                    try:
+                        pdf_bytes = generar_recibo_pdf(dat)
+                        
+                        col_pdf, col_cerrar = st.columns([3, 1])
+                        col_pdf.download_button(
+                            label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
+                            data=pdf_bytes,
+                            file_name=f"Recibo_{dat['n_orden']}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            type="primary"
+                        )
+                        if col_cerrar.button("✖️ Quitar"):
+                            del st.session_state['pdf_data']
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al generar el PDF: {e}")
 
-                # --- BOTÓN ELIMINAR (SOLO ADMIN) ---
+                # 3. ZONA DE PELIGRO (TAMBIÉN FUERA DEL FORM)
                 if st.session_state.get('rol') == 'admin':
                     st.divider()
                     with st.expander("🗑️ Zona de Peligro"):
-                        st.error(f"¡Atención! Se eliminará la orden **{sel}** de Ventas y de la Caja.")
                         if st.button(f"ELIMINAR ORDEN {sel}", type="primary", use_container_width=True):
-                            payload_delete = {
-                                "accion": "eliminar", 
-                                "tipo_registro": "ventas", 
-                                "id_busqueda": sel
-                            }
-                            if enviar_google(payload_delete):
+                            if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": sel}):
                                 st.success(f"✅ Orden {sel} eliminada.")
                                 st.rerun()
-
+                                
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
