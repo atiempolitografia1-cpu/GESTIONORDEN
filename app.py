@@ -45,6 +45,67 @@ def formato_pesos(valor):
     except:
         return "$ 0"
 
+def generar_recibo_pdf(datos):
+    # Crear objeto PDF en formato media carta (A5)
+    pdf = FPDF(orientation='P', unit='mm', format='A5')
+    pdf.add_page()
+    
+    # --- Encabezado ---
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "RECIBO DE CAJA", ln=True, align="C")
+    
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 5, "ATIEMPO IMPRESORES", ln=True, align="C")
+    pdf.set_font("Arial", "", 9)
+    pdf.cell(0, 5, "Soporte de Pago Interno", ln=True, align="C")
+    pdf.ln(8)
+    
+    # --- Información del Cliente y Orden ---
+    pdf.set_fill_color(240, 240, 240)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 8, f" COMPROBANTE: RC-{datos['n_orden']}", ln=True, fill=True)
+    
+    pdf.set_font("Arial", "", 10)
+    pdf.ln(2)
+    pdf.cell(0, 7, f"Fecha: {datos['fecha']}", ln=True)
+    pdf.cell(0, 7, f"Cliente: {datos['cliente']}", ln=True)
+    pdf.cell(0, 7, f"NIT/CC: {datos['nit']}", ln=True)
+    pdf.ln(5)
+    
+    # --- Detalles del Pago ---
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_fill_color(200, 200, 200)
+    pdf.cell(90, 8, "CONCEPTO", 1, 0, "C", True)
+    pdf.cell(35, 8, "VALOR", 1, 1, "C", True)
+    
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(90, 10, f"Abono a orden de trabajo N° {datos['n_orden']}", 1)
+    # Aquí usamos tu función formato_pesos
+    pdf.cell(35, 10, f"{formato_pesos(datos['abono_hoy'])}", 1, 1, "R")
+    
+    # --- Resumen de Cuenta ---
+    pdf.ln(5)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(90, 7, "VALOR TOTAL DE LA ORDEN:", 0, 0, "R")
+    pdf.cell(35, 7, f"{formato_pesos(datos['total'])}", 0, 1, "R")
+    
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(90, 7, "TOTAL ABONADO:", 0, 0, "R")
+    pdf.cell(35, 7, f"{formato_pesos(datos['total_abonado'])}", 0, 1, "R")
+    
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(90, 10, "SALDO PENDIENTE:", 0, 0, "R")
+    pdf.cell(35, 10, f"{formato_pesos(datos['saldo_pendiente'])}", 0, 1, "R")
+    
+    # --- Nota Legal ---
+    pdf.ln(15)
+    pdf.set_font("Arial", "I", 8)
+    pdf.multi_cell(0, 5, "Este documento es un soporte contable de carácter interno. No representa una factura electrónica de venta según la normativa vigente.", align="C")
+    
+    # Retornar el PDF como bytes (importante para Streamlit)
+    return pdf.output(dest='S')
+        
+
 def a_numero(valor):
     try:
         if not valor: return 0.0
