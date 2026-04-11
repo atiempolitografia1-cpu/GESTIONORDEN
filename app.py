@@ -326,6 +326,30 @@ if opcion == "Ventas":
                                 }
                                 enviar_google(p_caja_nuevo)
                             st.success(f"✅ Orden actualizada.")
+                            # --- GENERACIÓN DEL RECIBO ---
+                            datos_recibo = {
+                                "n_orden": sel,
+                                "cliente": e_cli,
+                                "nit": e_nit,
+                                "fecha": f_abono_str,
+                                "abono_hoy": e_nab,
+                                "total": e_tot,
+                                "total_abonado": nuevo_abono_total,
+                                "saldo_pendiente": nuevo_saldo
+                            }
+                            
+                            pdf_recibo = generar_recibo_pdf(datos_recibo)
+                            
+                            st.download_button(
+                                label="📥 DESCARGAR RECIBO DE CAJA (PDF)",
+                                data=pdf_recibo,
+                                file_name=f"Recibo_{sel}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True
+                            )
+                            
+                            # Quitamos el st.rerun() automático para que te dé tiempo de descargar el PDF
+                            if st.button("Finalizar y Volver"):
                             st.rerun()
 
                 # --- NUEVO: BOTÓN ELIMINAR (FUERA DEL FORMULARIO) ---
