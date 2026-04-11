@@ -53,7 +53,7 @@ def generar_recibo_pdf(datos):
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECIBO DE CAJA", ln=True, align="C")
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 5, "ATIEMPO IMPRESORES", ln=True, align="C")
+    pdf.cell(0, 5, "LITOGRAFIA ATIEMPO SAS", ln=True, align="C")
     pdf.ln(5)
     
     # --- Datos del Cliente ---
@@ -108,7 +108,10 @@ def generar_recibo_pdf(datos):
     
     pdf.ln(10)
     pdf.set_font("Arial", "I", 8)
-    pdf.multi_cell(0, 5, "Soporte interno de pago - Atiempo Impresores", align="C")
+    pdf.multi_cell(0, 5, "Soporte interno de pago - Atiempo litografia SAS ", align="C")
+    pdf.ln(4)
+    pdf.set_font("Arial", "I", 8)
+    pdf.multi_cell(0, 5, "ESTE DOCUMENTO NO REMPLAZA LA FACTURA DE VENTA ", align="C")
     
     return bytes(pdf.output())
         
