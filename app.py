@@ -223,7 +223,6 @@ if opcion == "Ventas":
         v = str(st.session_state.get('limp', 0)) 
         st.subheader("📝 Registrar Nueva Orden")
         c_f1, c_f2 = st.columns([1, 2])
-        # CAMBIO: Usamos fecha_hoy_col para evitar salto de día
         fecha_manual = c_f1.date_input("📅 Fecha de la Orden", value=fecha_hoy_col)
         
         c1, c2 = st.columns(2)
@@ -251,24 +250,68 @@ if opcion == "Ventas":
                 st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
             else:
                 fecha_str = fecha_manual.strftime("%d/%m/%Y")
+                historial_inicial = f"{formato_pesos(abo)} ({pag}) {fecha_str}"
+                
                 p_venta = {
                     "accion": "insertar", "tipo_registro": "ventas", "fecha": fecha_str,
                     "n_orden": str(ord), "descripcion": str(desc), "total": float(tot),
                     "abono": float(abo), "saldo": float(tot - abo), "metodo_pago": str(pag),
                     "estado": str(est), "empleado": str(st.session_state['usuario']),
                     "cliente": str(cli), "nit": str(nit), "celular": str(cel),
-                    "correo": str(cor), "factura": str(fac), "historial_pagos": f"{formato_pesos(abo)} ({pag}) {fecha_str}"
+                    "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial
                 }
                 p_caja = {
                     "accion": "insertar", "tipo_registro": "caja", "fecha": fecha_str,
                     "n_orden": str(ord), "valor": float(abo), "metodo": str(pag),
                     "empleado": str(st.session_state['usuario'])
                 }
+                
                 if enviar_google(p_venta):
                     if abo > 0: enviar_google(p_caja)
+                    
+                    # --- GUARDAMOS DATOS PARA EL RECIBO ---
+                    st.session_state['pdf_registro'] = {
+                        "n_orden": str(ord),
+                        "cliente": str(cli),
+                        "nit": str(nit),
+                        "fecha": fecha_str,
+                        "abono_hoy": float(abo),
+                        "total": float(tot),
+                        "total_abonado": float(abo),
+                        "saldo_pendiente": float(tot - abo),
+                        "historial_pagos": historial_inicial
+                    }
+                    
                     st.success(f"✅ Orden {ord} registrada")
                     st.session_state['limp'] = st.session_state.get('limp', 0) + 1
                     st.rerun()
+
+        # --- BOTÓN DE DESCARGA (FUERA DEL PROCESO DE GUARDADO) ---
+        if 'pdf_registro' in st.session_state:
+            dat = st.session_state['pdf_registro']
+            st.write("---")
+            st.info(f"📄 Recibo de entrada disponible para la orden {dat['n_orden']}")
+            
+            # Generamos los bytes del PDF con la función mejorada (Paso 3 anterior)
+            try:
+                archivo_pdf = generar_recibo_pdf(dat)
+                
+                c_desc, c_limp = st.columns([3, 1])
+                
+                c_desc.download_button(
+                    label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
+                    data=archivo_pdf,
+                    file_name=f"Recibo_Entrada_{dat['n_orden']}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    type="primary"
+                )
+                
+                if c_limp.button("✖️ Finalizar", key="limp_reg"):
+                    del st.session_state['pdf_registro']
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error al generar el recibo: {e}")
 
     # --- PESTAÑA EDITAR / ABONAR ---
     with tabs[1]:
