@@ -4,6 +4,7 @@ from datetime import datetime, timedelta # Agregamos timedelta aquí
 import requests
 import io
 import re
+from fpdf import FPDF
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
