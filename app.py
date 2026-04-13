@@ -79,31 +79,37 @@ def generar_recibo_pdf(datos):
     # ... (Sigue el resto de tu código de la tabla de conceptos y resumen) ...
     # Asegúrate de mantener la parte final de: return bytes(pdf.output())
     
-    # --- Tabla de Conceptos (CON DESCRIPCIÓN) ---
+    # --- Tabla de Conceptos (AJUSTADA PARA DESCRIPCIONES LARGAS) ---
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(90, 8, "CONCEPTO / DESCRIPCIÓN", 1, 0, "C", True)
     pdf.cell(35, 8, "VALOR", 1, 1, "C", True)
     
     pdf.set_font("Arial", "", 9)
-    # Combinamos el texto del abono con la descripción del trabajo
+    # Texto a mostrar
     texto_concepto = f"Abono a orden N° {datos['n_orden']}\nTrabajo: {datos.get('descripcion', 'N/A')}"
     
-    # Usamos multi_cell para que si la descripción es larga, salte de línea automáticamente
-    x_actual = pdf.get_x()
-    y_actual = pdf.get_y()
-    pdf.multi_cell(90, 7, texto_concepto, 1, "L")
+    # 1. Guardamos la posición inicial
+    x_inicial = pdf.get_x()
+    y_antes = pdf.get_y()
     
-    # Colocamos el valor al lado de la celda de descripción
-    pdf.set_xy(x_actual + 90, y_actual)
-    # Calculamos la altura que tomó la multi_cell para que el cuadro del valor coincida
-    altura_celda = pdf.get_y() - y_actual if pdf.get_y() - y_actual > 10 else 10
-    pdf.set_xy(x_actual + 90, y_actual)
-    pdf.cell(35, altura_celda, f"{formato_pesos(datos['abono_hoy'])}", 1, 1, "R")
+    # 2. Escribimos la descripción (esto puede ocupar varias líneas)
+    pdf.multi_cell(90, 6, texto_concepto, 1, "L")
     
-    # --- Historial de Pagos ---
+    # 3. Guardamos la posición final después de la descripción
+    y_despues = pdf.get_y()
+    altura_final = y_despues - y_antes
+    
+    # 4. Volvemos arriba para dibujar la celda del VALOR con la misma altura
+    pdf.set_xy(x_inicial + 90, y_antes)
+    pdf.cell(35, altura_final, f"{formato_pesos(datos['abono_hoy'])}", 1, 1, "R")
+    
+    # 5. IMPORTANTE: Forzamos a que el cursor esté debajo de lo más alto que se dibujó
+    pdf.set_y(y_despues) 
+
+    # --- Historial de Pagos (Ahora sí aparecerá debajo) ---
     if 'historial_pagos' in datos and datos['historial_pagos']:
-        pdf.ln(3)
+        pdf.ln(5) # Espacio de seguridad
         pdf.set_font("Arial", "B", 9)
         pdf.cell(0, 5, "Historial de abonos:", ln=True)
         pdf.set_font("Arial", "I", 8)
