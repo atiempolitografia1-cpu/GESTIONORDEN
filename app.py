@@ -487,7 +487,7 @@ if opcion == "Ventas":
             
             # Cartera generada de esas órdenes nuevas
             cartera_nueva = df_v_dia['saldo_n'].sum()
-            m3.metric("🚩 CARTERA DE HOY", formato_pesos(cartera_nueva), delta_color="inverse")
+            m3.metric("🚩 CARTERA DE FECHA", formato_pesos(cartera_nueva), delta_color="inverse")
             
             with st.expander("🔍 Ver detalle de producción (Solo órdenes creadas hoy)"):
                 st.dataframe(df_v_dia[['fecha', 'n_orden', 'cliente', 'total', 'empleado']], use_container_width=True, hide_index=True)
