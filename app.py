@@ -254,6 +254,31 @@ if opcion == "Ventas":
     with tabs[0]:
         v = str(st.session_state.get('limp', 0)) 
         st.subheader("📝 Registrar Nueva Orden")
+
+        # --- INICIO BLOQUE: RESUMEN PERSONAL DEL DÍA ---
+        # Filtramos las ventas del usuario actual creadas hoy
+        df_mi_dia = df_v_comp[
+            (df_v_comp['solo_dia'] == fecha_hoy_col) & 
+            (df_v_comp['empleado'] == st.session_state['usuario'])
+        ]
+        
+        # Solo mostramos el resumen si el empleado ya tiene al menos una venta hoy
+        if not df_mi_dia.empty:
+            with st.container():
+                st.markdown(f"**Mi progreso de hoy, {st.session_state['usuario']}:**")
+                c_mi1, c_mi2, c_mi3 = st.columns(3)
+                
+                mis_ventas_total = df_mi_dia['total_n'].sum()
+                mis_pedidos_count = len(df_mi_dia)
+                # Recaudo es el abono que entró hoy en esas órdenes nuevas
+                mi_recaudo_hoy = df_mi_dia['abono_n'].sum() 
+
+                c_mi1.metric("💰 Ventas Nuevas", formato_pesos(mis_ventas_total))
+                c_mi2.metric("📦 Pedidos", f"{mis_pedidos_count}")
+                c_mi3.metric("📥 Abono Recibido", formato_pesos(mi_recaudo_hoy))
+                st.divider()
+        # --- FIN BLOQUE: RESUMEN PERSONAL ---
+
         c_f1, c_f2 = st.columns([1, 2])
         fecha_manual = c_f1.date_input("📅 Fecha de la Orden", value=fecha_hoy_col)
         
@@ -301,7 +326,6 @@ if opcion == "Ventas":
                 if enviar_google(p_venta):
                     if abo > 0: enviar_google(p_caja)
                     
-                    # --- GUARDAMOS DATOS PARA EL RECIBO ---
                     st.session_state['pdf_registro'] = {
                         "n_orden": str(ord),
                         "cliente": str(cli),
@@ -319,18 +343,14 @@ if opcion == "Ventas":
                     st.session_state['limp'] = st.session_state.get('limp', 0) + 1
                     st.rerun()
 
-        # --- BOTÓN DE DESCARGA (FUERA DEL PROCESO DE GUARDADO) ---
         if 'pdf_registro' in st.session_state:
+            # ... (tu código del botón de descarga sigue igual)
             dat = st.session_state['pdf_registro']
             st.write("---")
             st.info(f"📄 Recibo de entrada disponible para la orden {dat['n_orden']}")
-            
-            # Generamos los bytes del PDF con la función mejorada (Paso 3 anterior)
             try:
                 archivo_pdf = generar_recibo_pdf(dat)
-                
                 c_desc, c_limp = st.columns([3, 1])
-                
                 c_desc.download_button(
                     label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
                     data=archivo_pdf,
@@ -339,7 +359,6 @@ if opcion == "Ventas":
                     use_container_width=True,
                     type="primary"
                 )
-                
                 if c_limp.button("✖️ Finalizar", key="limp_reg"):
                     del st.session_state['pdf_registro']
                     st.rerun()
