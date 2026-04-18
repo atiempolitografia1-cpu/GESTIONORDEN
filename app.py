@@ -463,21 +463,39 @@ if opcion == "Ventas":
             df_caja = leer_datos("caja")
             
             c1, c2, c3 = st.columns(3)
-            # CAMBIO: Usamos fecha_hoy_col
             f_ini = c1.date_input("📅 Desde", value=fecha_hoy_col, key="f_ini_rep")
             f_fin = c2.date_input("📅 Hasta", value=fecha_hoy_col, key="f_fin_rep")
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
 
+            # --- 1. REPORTE PARA LA CONTADORA: PRODUCCIÓN BRUTA (ÓRDENES NUEVAS) ---
+            st.markdown("---")
+            st.markdown("### 📊 Producción: Valor de Órdenes Nuevas")
+            st.caption("Muestra el valor total de trabajos creados en estas fechas. No incluye abonos de trabajos antiguos.")
+            
+            # Filtramos estrictamente por la fecha de creación de la orden
             df_v_dia = df_v_comp[(df_v_comp['solo_dia'] >= f_ini) & (df_v_comp['solo_dia'] <= f_fin)]
             if e_sel != "TODOS":
                 df_v_dia = df_v_dia[df_v_dia['empleado'] == e_sel]
             
-            cartera_del_periodo = df_v_dia['saldo_n'].sum()
-            st.warning(f"### 🚩 Cartera del Periodo Seleccionado: {formato_pesos(cartera_del_periodo)}")
+            prod_bruta = df_v_dia['total_n'].sum()
+            cant_ord = len(df_v_dia)
             
+            m1, m2, m3 = st.columns(3)
+            m1.metric("💰 TOTAL VENTAS NUEVAS", formato_pesos(prod_bruta))
+            m2.metric("📝 ÓRDENES CREADAS", f"{cant_ord} Pedidos")
+            
+            # Cartera generada de esas órdenes nuevas
+            cartera_nueva = df_v_dia['saldo_n'].sum()
+            m3.metric("🚩 CARTERA DE HOY", formato_pesos(cartera_nueva), delta_color="inverse")
+            
+            with st.expander("🔍 Ver detalle de producción (Solo órdenes creadas hoy)"):
+                st.dataframe(df_v_dia[['fecha', 'n_orden', 'cliente', 'total', 'empleado']], use_container_width=True, hide_index=True)
+
+            # --- 2. RECAUDO: DINERO QUE INGRESÓ A CAJA (INCLUYE ABONOS VIEJOS) ---
             st.markdown("---")
-            st.markdown("### 💰 Cuadre de Caja (Dinero Ingresado)")
+            st.markdown("### 💰 Cuadre de Caja (Recaudo Total)")
+            st.caption("Muestra TODO el dinero que entró a la caja (Abonos nuevos + Abonos de órdenes viejas).")
             
             if not df_caja.empty:
                 df_c_fil = df_caja[(df_caja['solo_dia'] >= f_ini) & (df_caja['solo_dia'] <= f_fin)]
@@ -486,10 +504,9 @@ if opcion == "Ventas":
                 
                 g_efe, g_neq, g_ban, g_dav = 0.0, 0.0, 0.0, 0.0
                 for emp in df_c_fil['empleado'].unique():
-                    with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=True):
+                    with st.expander(f"📥 Ver Caja de: {emp.upper()}", expanded=False):
                         df_emp = df_c_fil[df_c_fil['empleado'] == emp]
                         col1, col2, col3, col4 = st.columns(4)
-                        # Forzamos la columna a String (Texto) antes de limpiar y comparar
                         s_efe = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "EFECTIVO"]['valor_n'].sum()
                         s_neq = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "NEQUI"]['valor_n'].sum()
                         s_ban = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "BANCOLOMBIA"]['valor_n'].sum()
@@ -504,7 +521,7 @@ if opcion == "Ventas":
 
                 if e_sel == "TODOS" and not df_c_fil.empty:
                     st.divider()
-                    st.markdown("### 🏆 RESUMEN TOTAL DE TODA LA TIENDA")
+                    st.markdown("### 🏆 RESUMEN TOTAL DE RECAUDO")
                     m1, m2, m3, m4 = st.columns(4)
                     m1.info(f"**Total Efectivo**\n\n{formato_pesos(g_efe)}")
                     m2.info(f"**Total Nequi**\n\n{formato_pesos(g_neq)}")
@@ -524,47 +541,7 @@ if opcion == "Ventas":
                 else: df_final = df_r.copy()
                 st.dataframe(df_final.sort_values('n_orden', ascending=False), use_container_width=True, hide_index=True)
 
-    # --- PESTAÑA 4: GESTIÓN DE ALMUERZOS (SOLO ADMIN) ---
-    if st.session_state['rol'] == 'admin':
-        with tabs[3]: 
-            st.subheader("⏰ Control de Horarios de Almuerzo")
-            with st.container(border=True):
-                col1, col2 = st.columns(2)
-                emp_h = col1.selectbox("Seleccionar Empleado", df_users_db['nombre'].tolist(), key="sel_emp_almuerzo")
-                tipo_evento = col2.selectbox("Acción", ["Salida a Almuerzo 🍕", "Regreso de Almuerzo ✅"])
-                
-                if st.button("🚀 Registrar Hora Actual", use_container_width=True):
-                    ahora_local = datetime.now() - timedelta(hours=5) 
-                    datos_hora = {
-                        "accion": "guardar_almuerzo",
-                        "fecha": ahora_local.strftime("%d/%m/%Y"),
-                        "empleado": emp_h,
-                        "evento": tipo_evento,
-                        "hora": ahora_local.strftime("%I:%M:%S %p")
-                    }
-                    if enviar_google(datos_hora):
-                        st.success(f"✅ Registrado!")
-                        st.rerun() 
-
-            st.divider()
-            st.markdown("### 📅 Registros de Hoy")
-            df_h_raw = leer_datos("horarios")
-            if not df_h_raw.empty:
-                hoy_str = fecha_hoy_col.strftime("%d/%m/%Y")
-                df_h_hoy = df_h_raw[df_h_raw['fecha'] == hoy_str].copy()
-                
-                if not df_h_hoy.empty:
-                    event = st.dataframe(df_h_hoy[['empleado', 'evento', 'hora']], 
-                                         use_container_width=True, on_select="rerun", selection_mode="single-row")
-                    selection = event.get("selection", {}).get("rows", [])
-                    if selection:
-                        fila_data = df_h_hoy.iloc[selection[0]]
-                        st.warning(f"¿Eliminar registro de **{fila_data['empleado']}**?")
-                        if st.button("🗑️ Confirmar Eliminación", type="primary"):
-                            if enviar_google({"accion": "eliminar_horario", "id_busqueda": fila_data['hora']}):
-                                st.success("Eliminado"); st.rerun()
-                else: st.info(f"Sin registros para hoy ({hoy_str})")
-
+    
     # --- HISTORIAL GENERAL (Visible para todos bajo las pestañas) ---
     st.divider()
     st.subheader("📋 Historial de Órdenes")
