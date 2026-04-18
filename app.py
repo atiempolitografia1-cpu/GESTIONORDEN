@@ -470,7 +470,7 @@ if opcion == "Ventas":
 
             # --- 1. REPORTE PARA LA CONTADORA: PRODUCCIÓN BRUTA (ÓRDENES NUEVAS) ---
             st.markdown("---")
-            st.markdown("### 📊 Producción: Valor de Órdenes Nuevas")
+            st.markdown("### 📊 Producción: Valor de Órdenes Segun fecha")
             st.caption("Muestra el valor total de trabajos creados en estas fechas. No incluye abonos de trabajos antiguos.")
             
             # Filtramos estrictamente por la fecha de creación de la orden
@@ -482,7 +482,7 @@ if opcion == "Ventas":
             cant_ord = len(df_v_dia)
             
             m1, m2, m3 = st.columns(3)
-            m1.metric("💰 TOTAL VENTAS NUEVAS", formato_pesos(prod_bruta))
+            m1.metric("💰 TOTAL VENTAS FECHA", formato_pesos(prod_bruta))
             m2.metric("📝 ÓRDENES CREADAS", f"{cant_ord} Pedidos")
             
             # Cartera generada de esas órdenes nuevas
