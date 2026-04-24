@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta # Agregamos timedelta aquí
 import requests
 import io
 import re
@@ -9,19 +9,17 @@ from fpdf import FPDF
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
 
-# VARIABLE GLOBAL PARA FECHA COLOMBIA
+# VARIABLE GLOBAL PARA FECHA COLOMBIA (Soluciona el error de las 7:00 PM)
 fecha_hoy_col = (datetime.now() - timedelta(hours=5)).date()
-
-# --- CONSTANTE DE REINICIO ---
-# Todos los datos anteriores a esta fecha serán ignorados por la App
-FECHA_REINICIO = datetime(2026, 5, 1).date()
 
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stDeployButton {display:none;}
     button[kind="headerNoPadding"] { visibility: visible !important; z-index: 9999991; background-color: rgba(255,255,255,0.1); border-radius: 5px; }
+    /* Estilo para métricas */
     [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00802b; }
+    /* Estilo para el visor de moneda en tiempo real */
     .money-helper {
         font-size: 1.1rem;
         font-weight: bold;
@@ -50,54 +48,79 @@ def formato_pesos(valor):
 def generar_recibo_pdf(datos):
     pdf = FPDF(orientation='P', unit='mm', format='A5')
     pdf.add_page()
+    
+    # --- LOGO (Nombre exacto de tu archivo) ---
     try:
+        # Usamos el nombre exacto de tu captura: 'logo atiempo.png'
         pdf.image('logo atiempo.png', 10, 10, 35) 
     except Exception as e:
+        # Si algo falla con el logo, no detiene el programa
         print(f"Error cargando logo: {e}")
     
+    # --- Encabezado ---
+    # Empujamos el texto a la derecha (45mm) para dejar espacio al logo
     pdf.set_font("Arial", "B", 16)
     pdf.set_x(50) 
     pdf.cell(0, 10, "RECIBO DE CAJA", ln=True, align="L")
+    
     pdf.set_font("Arial", "B", 10)
     pdf.set_x(50)
     pdf.cell(0, 5, "ATIEMPO IMPRESORES", ln=True, align="L")
-    pdf.ln(12) 
     
+    pdf.ln(12) # Espacio extra para bajar y que no se pegue al logo
+    
+    # --- Datos del Cliente ---
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 7, f"Comprobante: RC-{datos['n_orden']}", ln=True)
     pdf.cell(0, 7, f"Cliente: {datos['cliente']}", ln=True)
     pdf.cell(0, 7, f"Fecha: {datos['fecha']}", ln=True)
     pdf.ln(5)
 
+    # ... (Sigue el resto de tu código de la tabla de conceptos y resumen) ...
+    # Asegúrate de mantener la parte final de: return bytes(pdf.output())
+    
+    # --- Tabla de Conceptos (AJUSTADA PARA DESCRIPCIONES LARGAS) ---
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(90, 8, "CONCEPTO / DESCRIPCIÓN", 1, 0, "C", True)
     pdf.cell(35, 8, "VALOR", 1, 1, "C", True)
     
     pdf.set_font("Arial", "", 9)
+    # Texto a mostrar
     texto_concepto = f"Abono a orden N° {datos['n_orden']}\nTrabajo: {datos.get('descripcion', 'N/A')}"
     
+    # 1. Guardamos la posición inicial
     x_inicial = pdf.get_x()
     y_antes = pdf.get_y()
+    
+    # 2. Escribimos la descripción (esto puede ocupar varias líneas)
     pdf.multi_cell(90, 6, texto_concepto, 1, "L")
+    
+    # 3. Guardamos la posición final después de la descripción
     y_despues = pdf.get_y()
     altura_final = y_despues - y_antes
     
+    # 4. Volvemos arriba para dibujar la celda del VALOR con la misma altura
     pdf.set_xy(x_inicial + 90, y_antes)
     pdf.cell(35, altura_final, f"{formato_pesos(datos['abono_hoy'])}", 1, 1, "R")
+    
+    # 5. IMPORTANTE: Forzamos a que el cursor esté debajo de lo más alto que se dibujó
     pdf.set_y(y_despues) 
 
+    # --- Historial de Pagos (Ahora sí aparecerá debajo) ---
     if 'historial_pagos' in datos and datos['historial_pagos']:
-        pdf.ln(5)
+        pdf.ln(5) # Espacio de seguridad
         pdf.set_font("Arial", "B", 9)
         pdf.cell(0, 5, "Historial de abonos:", ln=True)
         pdf.set_font("Arial", "I", 8)
         pdf.multi_cell(0, 5, datos['historial_pagos'].replace("|", "\n"), align="L")
     
+    # --- Resumen Financiero ---
     pdf.ln(5)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(90, 7, "VALOR TOTAL DE LA ORDEN:", 0, 0, "R")
     pdf.cell(35, 7, f"{formato_pesos(datos['total'])}", 0, 1, "R")
+    
     pdf.cell(90, 7, "TOTAL ABONADO:", 0, 0, "R")
     pdf.cell(35, 7, f"{formato_pesos(datos['total_abonado'])}", 0, 1, "R")
     
@@ -109,9 +132,11 @@ def generar_recibo_pdf(datos):
     pdf.set_font("Arial", "I", 8)
     pdf.multi_cell(0, 5, "Soporte interno de pago - Atiempo litografia SAS ", align="C")
     pdf.ln(4)
+    pdf.set_font("Arial", "I", 8)
     pdf.multi_cell(0, 5, "ESTE DOCUMENTO NO REMPLAZA LA FACTURA DE VENTA ", align="C")
     
     return bytes(pdf.output())
+        
 
 def a_numero(valor):
     try:
@@ -122,6 +147,7 @@ def a_numero(valor):
 
 def leer_datos(pestana):
     try:
+        # Usamos microsegundos para evitar el caché de Google
         url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
         res = requests.get(url, timeout=10)
         df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
@@ -135,8 +161,6 @@ def leer_datos(pestana):
             df['saldo_n'] = df['total_n'] - df['abono_n']
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
             df['solo_dia'] = df['fecha_dt'].dt.date
-            # --- FILTRO DE REINICIO MAYO 1 ---
-            df = df[df['solo_dia'] >= FECHA_REINICIO]
             
         elif pestana == "usuarios":
             df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
@@ -145,16 +169,23 @@ def leer_datos(pestana):
             cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
             df = df.iloc[:, :len(cols_caja)]
             df.columns = cols_caja
+            
+            # Aseguramos que el valor sea numérico
             df['valor_n'] = df['valor'].apply(a_numero)
+            
+            # Convertimos la fecha. IMPORTANTE: dayfirst=True para formato DD/MM/YYYY
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            
+            # Eliminamos filas con fechas rotas
             df = df.dropna(subset=['fecha_dt'])
+            
+            # FORZAMOS el formato de fecha pura (sin horas) para comparar con date_input
             df['solo_dia'] = df['fecha_dt'].dt.date
-            # --- FILTRO DE REINICIO MAYO 1 ---
-            df = df[df['solo_dia'] >= FECHA_REINICIO]
+
         
         elif pestana == "horarios":
             if not df.empty:
-                df = df.iloc[:, :4]
+                df = df.iloc[:, :4] # Forzamos solo las 4 columnas necesarias
                 df.columns = ['fecha', 'empleado', 'evento', 'hora']
             else:
                 return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
@@ -189,10 +220,15 @@ if not st.session_state['autenticado']:
 
 # --- 4. INTERFAZ ---
 with st.sidebar:
+    # 1. Colocamos el logo al principio de la barra lateral
     st.image("logo atiempo.png", use_container_width=True)
+    
+    # 2. Debajo aparecerá el nombre del usuario
     st.markdown(f"### 👤 {st.session_state['usuario'].upper()}")
+    
     menu = ["Ventas", "Gestión de Empleados"] if st.session_state['rol'] == 'admin' else ["Ventas"]
     opcion = st.radio("Menú:", menu)
+    
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state['autenticado'] = False
         st.rerun()
@@ -201,6 +237,7 @@ if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v_comp = leer_datos("ventas")
     
+    # ... resto de tu código de lógica de ventas
     if st.session_state['rol'] == 'admin':
         df_v = df_v_comp.copy()
     else:
@@ -209,6 +246,7 @@ if opcion == "Ventas":
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': 
         t_labels.append("📊 Reportes Avanzados")
+        t_labels.append("⏰ Horarios") 
         
     tabs = st.tabs(t_labels)
     
@@ -217,22 +255,29 @@ if opcion == "Ventas":
         v = str(st.session_state.get('limp', 0)) 
         st.subheader("📝 Registrar Nueva Orden")
 
+        # --- INICIO BLOQUE: RESUMEN PERSONAL DEL DÍA ---
+        # Filtramos las ventas del usuario actual creadas hoy
         df_mi_dia = df_v_comp[
             (df_v_comp['solo_dia'] == fecha_hoy_col) & 
             (df_v_comp['empleado'] == st.session_state['usuario'])
         ]
         
+        # Solo mostramos el resumen si el empleado ya tiene al menos una venta hoy
         if not df_mi_dia.empty:
             with st.container():
                 st.markdown(f"**Mi progreso de hoy, {st.session_state['usuario']}:**")
                 c_mi1, c_mi2, c_mi3 = st.columns(3)
+                
                 mis_ventas_total = df_mi_dia['total_n'].sum()
                 mis_pedidos_count = len(df_mi_dia)
+                # Recaudo es el abono que entró hoy en esas órdenes nuevas
                 mi_recaudo_hoy = df_mi_dia['abono_n'].sum() 
+
                 c_mi1.metric("💰 Ventas Nuevas", formato_pesos(mis_ventas_total))
                 c_mi2.metric("📦 Pedidos", f"{mis_pedidos_count}")
                 c_mi3.metric("📥 Abono Recibido", formato_pesos(mi_recaudo_hoy))
                 st.divider()
+        # --- FIN BLOQUE: RESUMEN PERSONAL ---
 
         c_f1, c_f2 = st.columns([1, 2])
         fecha_manual = c_f1.date_input("📅 Fecha de la Orden", value=fecha_hoy_col)
@@ -280,16 +325,26 @@ if opcion == "Ventas":
                 
                 if enviar_google(p_venta):
                     if abo > 0: enviar_google(p_caja)
+                    
                     st.session_state['pdf_registro'] = {
-                        "n_orden": str(ord), "cliente": str(cli), "nit": str(nit), "fecha": fecha_str,
-                        "abono_hoy": float(abo), "total": float(tot), "total_abonado": float(abo),
-                        "saldo_pendiente": float(tot - abo), "descripcion": desc, "historial_pagos": historial_inicial
+                        "n_orden": str(ord),
+                        "cliente": str(cli),
+                        "nit": str(nit),
+                        "fecha": fecha_str,
+                        "abono_hoy": float(abo),
+                        "total": float(tot),
+                        "total_abonado": float(abo),
+                        "saldo_pendiente": float(tot - abo),
+                        "descripcion": desc,
+                        "historial_pagos": historial_inicial
                     }
+                    
                     st.success(f"✅ Orden {ord} registrada")
                     st.session_state['limp'] = st.session_state.get('limp', 0) + 1
                     st.rerun()
 
         if 'pdf_registro' in st.session_state:
+            # ... (tu código del botón de descarga sigue igual)
             dat = st.session_state['pdf_registro']
             st.write("---")
             st.info(f"📄 Recibo de entrada disponible para la orden {dat['n_orden']}")
@@ -298,8 +353,11 @@ if opcion == "Ventas":
                 c_desc, c_limp = st.columns([3, 1])
                 c_desc.download_button(
                     label=f"📥 DESCARGAR RECIBO {dat['n_orden']}",
-                    data=archivo_pdf, file_name=f"Recibo_Entrada_{dat['n_orden']}.pdf",
-                    mime="application/pdf", use_container_width=True, type="primary"
+                    data=archivo_pdf,
+                    file_name=f"Recibo_Entrada_{dat['n_orden']}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    type="primary"
                 )
                 if c_limp.button("✖️ Finalizar", key="limp_reg"):
                     del st.session_state['pdf_registro']
@@ -315,6 +373,7 @@ if opcion == "Ventas":
                 val = df_v[df_v['n_orden'] == sel].iloc[0]
                 st.info(f"Orden: **{sel}** | Registrada por: **{val['empleado']}**")
                 
+                # 1. EL FORMULARIO (Solo para capturar datos y actualizar)
                 with st.form("f_edicion_pro"):
                     c1, c2 = st.columns(2)
                     e_cli = c1.text_input("Cliente", value=val['cliente'])
@@ -341,7 +400,9 @@ if opcion == "Ventas":
                     idx_est = estados_list.index(val['estado']) if val['estado'] in estados_list else 0
                     e_est = st.selectbox("Estado de la Orden", estados_list, index=idx_est)
                     
-                    if st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True):
+                    submit = st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True)
+
+                    if submit:
                         h_pago = val['historial_pagos']
                         f_abono_str = fecha_abono_manual.strftime('%d/%m/%Y')
                         if e_nab > 0:
@@ -363,32 +424,49 @@ if opcion == "Ventas":
                                 }
                                 enviar_google(p_caja_nuevo)
                             
+                            # --- ESTO ES LO QUE CAMBIA: GUARDAR TODO EL HISTORIAL ---
                             st.session_state['pdf_edicion'] = {
-                                "n_orden": sel, "cliente": e_cli, "nit": e_nit, "fecha": f_abono_str,
-                                "abono_hoy": e_nab, "total": e_tot, "total_abonado": nuevo_abono_total,
-                                "saldo_pendiente": nuevo_saldo, "descripcion": e_desc, "historial_pagos": h_pago 
+                                "n_orden": sel,
+                                "cliente": e_cli,
+                                "nit": e_nit,
+                                "fecha": f_abono_str,
+                                "abono_hoy": e_nab,
+                                "total": e_tot,
+                                "total_abonado": nuevo_abono_total,
+                                "saldo_pendiente": nuevo_saldo,
+                                "descripcion": e_desc,
+                                "historial_pagos": h_pago  # <--- Pasamos el historial acumulado
                             }
+                            
                             st.success(f"✅ Orden {sel} actualizada.")
                             st.rerun()
 
+                # --- BOTÓN DE DESCARGA (FUERA DEL FORMULARIO) ---
                 if 'pdf_edicion' in st.session_state:
                     dat = st.session_state['pdf_edicion']
                     st.divider()
                     st.info(f"📄 Recibo de Abono disponible: {dat['n_orden']}")
+                    
                     try:
                         archivo_pdf = generar_recibo_pdf(dat)
+                        
                         col_d, col_l = st.columns([3, 1])
                         col_d.download_button(
                             label=f"📥 DESCARGAR RECIBO DE ABONO",
-                            data=archivo_pdf, file_name=f"Recibo_Abono_{dat['n_orden']}.pdf",
-                            mime="application/pdf", use_container_width=True, type="primary"
+                            data=archivo_pdf,
+                            file_name=f"Recibo_Abono_{dat['n_orden']}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            type="primary"
                         )
+                        
                         if col_l.button("✖️ Finalizar", key="limp_edit"):
                             del st.session_state['pdf_edicion']
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al generar el recibo: {e}")
 
+                # 3. ZONA DE PELIGRO (TAMBIÉN FUERA DEL FORM)
                 if st.session_state.get('rol') == 'admin':
                     st.divider()
                     with st.expander("🗑️ Zona de Peligro"):
@@ -396,7 +474,7 @@ if opcion == "Ventas":
                             if enviar_google({"accion": "eliminar", "tipo_registro": "ventas", "id_busqueda": sel}):
                                 st.success(f"✅ Orden {sel} eliminada.")
                                 st.rerun()
-                                    
+                                
     # --- PESTAÑA REPORTES (ADMIN) ---
     if st.session_state['rol'] == 'admin':
         with tabs[2]:
@@ -404,30 +482,44 @@ if opcion == "Ventas":
             df_caja = leer_datos("caja")
             
             c1, c2, c3 = st.columns(3)
-            # El administrador puede ver reportes, pero solo desde la fecha de reinicio por defecto
-            f_ini = c1.date_input("📅 Desde", value=max(fecha_hoy_col, FECHA_REINICIO), key="f_ini_rep")
+            f_ini = c1.date_input("📅 Desde", value=fecha_hoy_col, key="f_ini_rep")
             f_fin = c2.date_input("📅 Hasta", value=fecha_hoy_col, key="f_fin_rep")
             lista_emp = ["TODOS"] + df_users_db['nombre'].tolist()
             e_sel = c3.selectbox("👤 Empleado", lista_emp)
 
+            # --- 1. REPORTE PARA LA CONTADORA: PRODUCCIÓN BRUTA (ÓRDENES NUEVAS) ---
+            st.markdown("---")
             st.markdown("### 📊 Producción: Valor de Órdenes Segun fecha")
+            st.caption("Muestra el valor total de trabajos creados en estas fechas. No incluye abonos de trabajos antiguos.")
+            
+            # Filtramos estrictamente por la fecha de creación de la orden
             df_v_dia = df_v_comp[(df_v_comp['solo_dia'] >= f_ini) & (df_v_comp['solo_dia'] <= f_fin)]
-            if e_sel != "TODOS": df_v_dia = df_v_dia[df_v_dia['empleado'] == e_sel]
+            if e_sel != "TODOS":
+                df_v_dia = df_v_dia[df_v_dia['empleado'] == e_sel]
             
             prod_bruta = df_v_dia['total_n'].sum()
+            cant_ord = len(df_v_dia)
+            
             m1, m2, m3 = st.columns(3)
             m1.metric("💰 TOTAL VENTAS FECHA", formato_pesos(prod_bruta))
-            m2.metric("📝 ÓRDENES CREADAS", f"{len(df_v_dia)} Pedidos")
-            m3.metric("🚩 CARTERA DE FECHA", formato_pesos(df_v_dia['saldo_n'].sum()), delta_color="inverse")
+            m2.metric("📝 ÓRDENES CREADAS", f"{cant_ord} Pedidos")
             
-            with st.expander("🔍 Ver detalle de producción"):
+            # Cartera generada de esas órdenes nuevas
+            cartera_nueva = df_v_dia['saldo_n'].sum()
+            m3.metric("🚩 CARTERA DE FECHA", formato_pesos(cartera_nueva), delta_color="inverse")
+            
+            with st.expander("🔍 Ver detalle de producción (Solo órdenes creadas Fecha)"):
                 st.dataframe(df_v_dia[['fecha', 'n_orden', 'descripcion', 'cliente', 'total', 'empleado']], use_container_width=True, hide_index=True)
 
+            # --- 2. RECAUDO: DINERO QUE INGRESÓ A CAJA (INCLUYE ABONOS VIEJOS) ---
             st.markdown("---")
             st.markdown("### 💰 Cuadre de Caja (Recaudo Total)")
+            st.caption("Muestra TODO el dinero que entró a la caja (Abonos nuevos + Abonos de órdenes viejas).")
+            
             if not df_caja.empty:
                 df_c_fil = df_caja[(df_caja['solo_dia'] >= f_ini) & (df_caja['solo_dia'] <= f_fin)]
-                if e_sel != "TODOS": df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
+                if e_sel != "TODOS": 
+                    df_c_fil = df_c_fil[df_c_fil['empleado'] == e_sel]
                 
                 g_efe, g_neq, g_ban, g_dav = 0.0, 0.0, 0.0, 0.0
                 for emp in df_c_fil['empleado'].unique():
@@ -438,17 +530,40 @@ if opcion == "Ventas":
                         s_neq = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "NEQUI"]['valor_n'].sum()
                         s_ban = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "BANCOLOMBIA"]['valor_n'].sum()
                         s_dav = df_emp[df_emp['metodo'].astype(str).str.upper().str.strip() == "DAVIPLATA"]['valor_n'].sum()
-                        col1.metric("💵 EFECTIVO", formato_pesos(s_efe)); col2.metric("📱 NEQUI", formato_pesos(s_neq))
-                        col3.metric("🏦 BANCO", formato_pesos(s_ban)); col4.metric("📲 DAVIPLATA", formato_pesos(s_dav))
+                        
+                        col1.metric("💵 EFECTIVO", formato_pesos(s_efe))
+                        col2.metric("📱 NEQUI", formato_pesos(s_neq))
+                        col3.metric("🏦 BANCO", formato_pesos(s_ban))
+                        col4.metric("📲 DAVIPLATA", formato_pesos(s_dav))
                         g_efe += s_efe; g_neq += s_neq; g_ban += s_ban; g_dav += s_dav
                         st.write(f"**Total de {emp}:** {formato_pesos(df_emp['valor_n'].sum())}")
 
                 if e_sel == "TODOS" and not df_c_fil.empty:
+                    st.divider()
+                    st.markdown("### 🏆 RESUMEN TOTAL DE RECAUDO")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.info(f"**Total Efectivo**\n\n{formato_pesos(g_efe)}")
+                    m2.info(f"**Total Nequi**\n\n{formato_pesos(g_neq)}")
+                    m3.info(f"**Total Banco**\n\n{formato_pesos(g_ban)}")
+                    m4.info(f"**Total Daviplata**\n\n{formato_pesos(g_dav)}")
                     st.success(f"## **RECAUDO TOTAL GLOBAL: {formato_pesos(g_efe + g_neq + g_ban + g_dav)}**")
 
-    # --- HISTORIAL GENERAL ---
+            st.divider()
+            st.markdown("### 🔍 Buscador de Órdenes y Cartera")
+            filtro_pago = st.radio("Estado de cuenta:", ["📑 Todo", "💸 Solo Pendientes", "✅ Solo Canceladas"], horizontal=True)
+            df_r = df_v_comp.copy()
+            if not df_r.empty and 'solo_dia' in df_r.columns:
+                df_r = df_r[(df_r['solo_dia'] >= f_ini) & (df_r['solo_dia'] <= f_fin)]
+                if e_sel != "TODOS": df_r = df_r[df_r['empleado'] == e_sel]
+                if "Pendientes" in filtro_pago: df_final = df_r[df_r['saldo_n'] > 0]
+                elif "Canceladas" in filtro_pago: df_final = df_r[df_r['saldo_n'] <= 0]
+                else: df_final = df_r.copy()
+                st.dataframe(df_final.sort_values('n_orden', ascending=False), use_container_width=True, hide_index=True)
+
+    
+    # --- HISTORIAL GENERAL (Visible para todos bajo las pestañas) ---
     st.divider()
-    st.subheader("📋 Historial de Órdenes (Desde Mayo 1)")
+    st.subheader("📋 Historial de Órdenes")
     busq = st.text_input("🔍 Buscar Orden o Cliente:")
     df_h = df_v.copy()
     if busq:
@@ -459,6 +574,7 @@ elif opcion == "Gestión de Empleados":
     st.title("👥 Personal")
     df_u = leer_datos("usuarios")
     t1, t2 = st.tabs(["➕ Nuevo Empleado", "✏️ Modificar / Eliminar"])
+    
     with t1:
         with st.form("nuevo_emp"):
             n_nom = st.text_input("Nombre Completo")
@@ -467,6 +583,7 @@ elif opcion == "Gestión de Empleados":
             if st.form_submit_button("Registrar en el Sistema"):
                 if enviar_google({"accion": "insertar", "tipo_registro": "usuarios", "nombre": n_nom, "clave": n_cla, "rol": n_rol}):
                     st.success("Registrado"); st.rerun()
+    
     with t2:
         if not df_u.empty:
             u_sel = st.selectbox("Seleccione Usuario:", df_u['nombre'].tolist())
