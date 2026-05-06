@@ -238,6 +238,7 @@ with st.sidebar:
 if opcion == "Ventas":
     st.title("🚀 Gestión de Ventas")
     df_v_comp = leer_datos("ventas")
+    df_gastos = leer_datos("gastos")
     
     # ... resto de tu código de lógica de ventas
     if st.session_state['rol'] == 'admin':
@@ -248,6 +249,7 @@ if opcion == "Ventas":
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': 
         t_labels.append("📊 Reportes Avanzados")
+        t_labels.append("💸 Gastos")
         t_labels.append("⏰ Horarios") 
         
     tabs = st.tabs(t_labels)
@@ -561,6 +563,68 @@ if opcion == "Ventas":
                 elif "Canceladas" in filtro_pago: df_final = df_r[df_r['saldo_n'] <= 0]
                 else: df_final = df_r.copy()
                 st.dataframe(df_final.sort_values('n_orden', ascending=False), use_container_width=True, hide_index=True)
+                
+    # --- PESTAÑA 3: GESTIÓN DE GASTOS ---
+    if st.session_state['rol'] == 'admin':
+        with tabs[3]:
+            st.subheader("💸 Registro de Gastos Operativos")
+            
+            with st.form("form_gastos_empresa", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                f_gasto = c1.date_input("Fecha del Gasto", value=fecha_hoy_col)
+                proveedor = c2.text_input("Empresa / Proveedor / Concepto")
+                
+                c3, c4 = st.columns(2)
+                valor_input = c3.text_input("Valor Total ($ COP)", value="0")
+                tipo_gasto = c4.selectbox("Categoría", ["Transporte", "Tercero", "Empleado", "Insumos", "Servicios", "Arriendo", "Otros"])
+                
+                # Ayuda visual del valor
+                valor_n_g = a_numero(valor_input)
+                c3.caption(f"Monto: {formato_pesos(valor_n_g)}")
+                
+                detalles = st.text_area("Descripción o notas del gasto")
+                
+                c5, c6, c7 = st.columns(3)
+                es_factura = c5.selectbox("¿Factura Electrónica?", ["NO", "SI"])
+                es_abono = c6.selectbox("¿Es un abono/deuda?", ["NO (Pago Total)", "SI (Abono)"])
+                metodo_g = c7.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
+                
+                btn_gasto = st.form_submit_button("💾 GUARDAR GASTO", use_container_width=True)
+                
+                if btn_gasto:
+                    if not proveedor or valor_n_g <= 0:
+                        st.error("⚠️ Debes indicar el proveedor y un valor mayor a cero.")
+                    else:
+                        datos_gasto = {
+                            "accion": "insertar",
+                            "tipo_registro": "gastos",
+                            "fecha": f_gasto.strftime("%d/%m/%Y"),
+                            "empresa": proveedor.upper(),
+                            "valor": float(valor_n_g),
+                            "tipo": tipo_gasto,
+                            "factura_e": es_factura,
+                            "descripcion": detalles,
+                            "abono_prov": es_abono,
+                            "medio": metodo_g
+                        }
+                        
+                        if enviar_google(datos_gasto):
+                            st.success("✅ Gasto registrado y guardado en la nube.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Error de conexión al guardar.")
+
+            # --- TABLA DE GASTOS RECIENTES ---
+            if not df_gastos.empty:
+                st.markdown("---")
+                st.write("### 📜 Últimos Gastos Registrados")
+                # Mostramos los últimos 10 gastos
+                st.dataframe(
+                    df_gastos.sort_values('fecha_dt', ascending=False).head(10),
+                    column_order=("fecha", "empresa", "valor", "tipo", "medio"),
+                    hide_index=True,
+                    use_container_width=True
+                )
 
     
     # --- HISTORIAL GENERAL (Visible para todos bajo las pestañas) ---
