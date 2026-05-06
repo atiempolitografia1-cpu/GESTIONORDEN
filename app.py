@@ -586,24 +586,33 @@ if opcion == "Ventas":
                 
                 c_s.metric("Deuda (Saldo)", formato_pesos(saldo_n))
                 
-                # ... resto de inputs (tipo, factura, etc) ...
+                # Definición de inputs restantes que faltaban en tu fragmento
+                detalles = st.text_area("Descripción o notas del gasto")
+                
+                cx, cy, cz = st.columns(3)
+                tipo_gasto = cx.selectbox("Categoría", ["Transporte", "Tercero", "Empleado", "Insumos", "Servicios", "Arriendo", "Otros"])
+                es_factura = cy.selectbox("¿Factura Electrónica?", ["NO", "SI"])
+                metodo_g = cz.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
                 
                 if st.form_submit_button("💾 GUARDAR GASTO"):
-                    datos_gasto = {
-                        "accion": "insertar",
-                        "tipo_registro": "gastos",
-                        "fecha": f_gasto.strftime("%d/%m/%Y"),
-                        "empresa": proveedor.upper(),
-                        "valor_total": float(total_n),
-                        "abono": float(abono_n),
-                        "saldo": float(saldo_n),
-                        "tipo": tipo_gasto,
-                        "factura_e": es_factura,
-                        "descripcion": detalles,
-                        "medio": metodo_g
-                    }
-                    # ... lógica de enviar_google ...
+                    if not proveedor or total_n <= 0:
+                        st.error("⚠️ Debes indicar el proveedor y un valor mayor a cero.")
+                    else:
+                        datos_gasto = {
+                            "accion": "insertar",
+                            "tipo_registro": "gastos",
+                            "fecha": f_gasto.strftime("%d/%m/%Y"),
+                            "empresa": proveedor.upper(),
+                            "valor_total": float(total_n),
+                            "abono": float(abono_n),
+                            "saldo": float(saldo_n),
+                            "tipo": tipo_gasto,
+                            "factura_e": es_factura,
+                            "descripcion": detalles,
+                            "medio": metodo_g
+                        }
                         
+                        # Aquí la indentación debe ser exactamente igual a la de arriba
                         if enviar_google(datos_gasto):
                             st.success("✅ Gasto registrado y guardado en la nube.")
                             st.rerun()
