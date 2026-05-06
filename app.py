@@ -176,12 +176,13 @@ def leer_datos(pestana):
 
         # --- BLOQUE NUEVO: GASTOS ---
         elif pestana == "gastos":
-            cols_g = ['fecha', 'empresa', 'valor', 'tipo', 'factura_e', 'descripcion', 'abono_prov', 'medio']
+            cols_g = ['fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
             df = df.iloc[:, :len(cols_g)]
             df.columns = cols_g
-            df['valor_n'] = df['valor'].apply(a_numero)
+            df['total_n'] = df['valor_total'].apply(a_numero)
+            df['abono_n'] = df['abono'].apply(a_numero)
+            df['saldo_n'] = df['saldo'].apply(a_numero)
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df = df.dropna(subset=['fecha_dt'])
             df['solo_dia'] = df['fecha_dt'].dt.date
         # ----------------------------
         
@@ -571,42 +572,37 @@ if opcion == "Ventas":
             
             with st.form("form_gastos_empresa", clear_on_submit=True):
                 c1, c2 = st.columns(2)
-                f_gasto = c1.date_input("Fecha del Gasto", value=fecha_hoy_col)
-                proveedor = c2.text_input("Empresa / Proveedor / Concepto")
+                f_gasto = c1.date_input("Fecha", value=fecha_hoy_col)
+                proveedor = c2.text_input("Proveedor / Concepto")
                 
-                c3, c4 = st.columns(2)
-                valor_input = c3.text_input("Valor Total ($ COP)", value="0")
-                tipo_gasto = c4.selectbox("Categoría", ["Transporte", "Tercero", "Empleado", "Insumos", "Servicios", "Arriendo", "Otros"])
+                c3, c4, c_s = st.columns(3)
+                v_total = c3.text_input("Valor Total del Gasto", value="0")
+                v_abono = c4.text_input("¿Cuánto pagas hoy? (Abono)", value="0")
                 
-                # Ayuda visual del valor
-                valor_n_g = a_numero(valor_input)
-                c3.caption(f"Monto: {formato_pesos(valor_n_g)}")
+                # Cálculo automático de saldo
+                total_n = a_numero(v_total)
+                abono_n = a_numero(v_abono)
+                saldo_n = total_n - abono_n
                 
-                detalles = st.text_area("Descripción o notas del gasto")
+                c_s.metric("Deuda (Saldo)", formato_pesos(saldo_n))
                 
-                c5, c6, c7 = st.columns(3)
-                es_factura = c5.selectbox("¿Factura Electrónica?", ["NO", "SI"])
-                es_abono = c6.selectbox("¿Es un abono/deuda?", ["NO (Pago Total)", "SI (Abono)"])
-                metodo_g = c7.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
+                # ... resto de inputs (tipo, factura, etc) ...
                 
-                btn_gasto = st.form_submit_button("💾 GUARDAR GASTO", use_container_width=True)
-                
-                if btn_gasto:
-                    if not proveedor or valor_n_g <= 0:
-                        st.error("⚠️ Debes indicar el proveedor y un valor mayor a cero.")
-                    else:
-                        datos_gasto = {
-                            "accion": "insertar",
-                            "tipo_registro": "gastos",
-                            "fecha": f_gasto.strftime("%d/%m/%Y"),
-                            "empresa": proveedor.upper(),
-                            "valor": float(valor_n_g),
-                            "tipo": tipo_gasto,
-                            "factura_e": es_factura,
-                            "descripcion": detalles,
-                            "abono_prov": es_abono,
-                            "medio": metodo_g
-                        }
+                if st.form_submit_button("💾 GUARDAR GASTO"):
+                    datos_gasto = {
+                        "accion": "insertar",
+                        "tipo_registro": "gastos",
+                        "fecha": f_gasto.strftime("%d/%m/%Y"),
+                        "empresa": proveedor.upper(),
+                        "valor_total": float(total_n),
+                        "abono": float(abono_n),
+                        "saldo": float(saldo_n),
+                        "tipo": tipo_gasto,
+                        "factura_e": es_factura,
+                        "descripcion": detalles,
+                        "medio": metodo_g
+                    }
+                    # ... lógica de enviar_google ...
                         
                         if enviar_google(datos_gasto):
                             st.success("✅ Gasto registrado y guardado en la nube.")
