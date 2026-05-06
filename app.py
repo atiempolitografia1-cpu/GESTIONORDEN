@@ -169,23 +169,25 @@ def leer_datos(pestana):
             cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
             df = df.iloc[:, :len(cols_caja)]
             df.columns = cols_caja
-            
-            # Aseguramos que el valor sea numérico
             df['valor_n'] = df['valor'].apply(a_numero)
-            
-            # Convertimos la fecha. IMPORTANTE: dayfirst=True para formato DD/MM/YYYY
             df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            
-            # Eliminamos filas con fechas rotas
             df = df.dropna(subset=['fecha_dt'])
-            
-            # FORZAMOS el formato de fecha pura (sin horas) para comparar con date_input
             df['solo_dia'] = df['fecha_dt'].dt.date
 
+        # --- BLOQUE NUEVO: GASTOS ---
+        elif pestana == "gastos":
+            cols_g = ['fecha', 'empresa', 'valor', 'tipo', 'factura_e', 'descripcion', 'abono_prov', 'medio']
+            df = df.iloc[:, :len(cols_g)]
+            df.columns = cols_g
+            df['valor_n'] = df['valor'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df = df.dropna(subset=['fecha_dt'])
+            df['solo_dia'] = df['fecha_dt'].dt.date
+        # ----------------------------
         
         elif pestana == "horarios":
             if not df.empty:
-                df = df.iloc[:, :4] # Forzamos solo las 4 columnas necesarias
+                df = df.iloc[:, :4] 
                 df.columns = ['fecha', 'empleado', 'evento', 'hora']
             else:
                 return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
