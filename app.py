@@ -626,7 +626,7 @@ if opcion == "Ventas":
                 # Mostramos los últimos 10 gastos
                 st.dataframe(
                     df_gastos.sort_values('fecha_dt', ascending=False).head(10),
-                    column_order=("fecha", "empresa", "valor", "tipo", "medio"),
+                    column_order=("fecha", "empresa", "valor_total", "abono", "tipo", "descripcion", "medio", "factura_e"),
                     hide_index=True,
                     use_container_width=True
                 )
