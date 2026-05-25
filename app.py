@@ -625,60 +625,64 @@ if opcion == "Ventas":
                 if not df_gastos.empty:
                     # Buscador interactivo por ID (N° de gasto) o por Proveedor
                     opciones_gasto = ["Seleccionar..."] + [f"{row['id_gasto']} - {row['empresa']} (Saldo: {formato_pesos(row['saldo_n'])})" for _, row in df_gastos.iterrows()]
-                    gasto_sel = st.selectbox("Buscar Gasto por Número o Proveedor:", opciones_gasto)
+                    gasto_sel = st.selectbox("Buscar Gasto por Número o Proveedor:", opciones_gasto, key="selector_gasto_editar")
                     
                     if gasto_sel != "Seleccionar...":
-                        id_gasto_edit = gasto_sel.split(" - ")[0]
-                        val_g = df_gastos[df_gastos['id_gasto'].astype(str) == str(id_gasto_edit)].iloc[0]
-                        
-                        st.info(f"Modificando Gasto N°: **{id_gasto_edit}**")
-                        
-                        with st.form("form_editar_gasto"):
-                            e_proveedor = st.text_input("Proveedor / Concepto", value=val_g['empresa'])
+                        try:
+                            id_gasto_edit = gasto_sel.split(" - ")[0].strip()
+                            val_g = df_gastos[df_gastos['id_gasto'].astype(str) == str(id_gasto_edit)].iloc[0]
                             
-                            c_val1, c_val2 = st.columns(2)
-                            e_v_total = a_numero(c_val1.text_input("Valor Total ($ COP)", value=str(int(val_g['total_n']))))
+                            st.info(f"Modificando Gasto N°: **{id_gasto_edit}**")
                             
-                            # Muestra cuánto se ha pagado en total históricamente
-                            st.markdown(f"**Abonado anteriormente:** {formato_pesos(val_g['abono_n'])}")
-                            e_nuevo_abono = a_numero(st.text_input("Añadir nuevo abono ($ COP)", value="0"))
-                            
-                            # Recálculos automáticos del nuevo saldo
-                            e_abono_acumulado = val_g['abono_n'] + e_nuevo_abono
-                            e_nuevo_saldo = e_v_total - e_abono_acumulado
-                            
-                            st.warning(f"Saldo Pendiente Anterior: {formato_pesos(val_g['saldo_n'])} | **Nuevo Saldo: {formato_pesos(e_nuevo_saldo)}**")
-                            
-                            e_detalles = st.text_area("Descripción o notas", value=val_g['descripcion'])
-                            
-                            cx_e, cy_e, cz_e = st.columns(3)
-                            cats = ["Insumos", "Transporte", "Tercero", "Empleado", "Servicios", "Arriendo", "Otros"]
-                            idx_cat = cats.index(val_g['tipo']) if val_g['tipo'] in cats else 0
-                            e_tipo = cx_e.selectbox("Categoría", cats, index=idx_cat)
-                            
-                            e_factura = cy_e.selectbox("¿Factura?", ["NO", "SI"], index=0 if val_g['factura_e'] == "NO" else 1)
-                            e_medio = cz_e.selectbox("Medio Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], index=["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"].index(val_g['medio']) if val_g['medio'] in ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"] else 0)
-                            
-                            if st.form_submit_button("💾 ACTUALIZAR REGISTRO DE GASTO", use_container_width=True):
-                                payload_edit = {
-                                    "accion": "actualizar",
-                                    "tipo_registro": "gastos",
-                                    "id_busqueda": str(id_gasto_edit),
-                                    "empresa": e_proveedor.upper(),
-                                    "valor_total": float(e_v_total),
-                                    "abono": float(e_abono_acumulado),
-                                    "saldo": float(e_nuevo_saldo),
-                                    "tipo": e_tipo,
-                                    "factura_e": e_factura,
-                                    "descripcion": e_detalles,
-                                    "medio": e_medio
-                                }
+                            # Usamos el id_gasto_edit en el key del formulario para obligarlo a refrescarse al cambiar de elemento
+                            with st.form(f"form_editar_gasto_{id_gasto_edit}"):
+                                e_proveedor = st.text_input("Proveedor / Concepto", value=val_g['empresa'], key=f"e_prov_{id_gasto_edit}")
                                 
-                                if enviar_google(payload_edit):
-                                    st.success(f"✅ Gasto N° {id_gasto_edit} actualizado con éxito.")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Error de comunicación al actualizar.")
+                                c_val1, c_val2 = st.columns(2)
+                                e_v_total = a_numero(c_val1.text_input("Valor Total ($ COP)", value=str(int(val_g['total_n'])), key=f"e_tot_{id_gasto_edit}"))
+                                
+                                # Muestra cuánto se ha pagado en total históricamente
+                                st.markdown(f"**Abonado anteriormente:** {formato_pesos(val_g['abono_n'])}")
+                                e_nuevo_abono = a_numero(st.text_input("Añadir nuevo abono ($ COP)", value="0", key=f"e_f_abo_{id_gasto_edit}"))
+                                
+                                # Recálculos automáticos del nuevo saldo
+                                e_abono_acumulado = val_g['abono_n'] + e_nuevo_abono
+                                e_nuevo_saldo = e_v_total - e_abono_acumulado
+                                
+                                st.warning(f"Saldo Pendiente Anterior: {formato_pesos(val_g['saldo_n'])} | **Nuevo Saldo: {formato_pesos(e_nuevo_saldo)}**")
+                                
+                                e_detalles = st.text_area("Descripción o notas", value=val_g['descripcion'], key=f"e_desc_{id_gasto_edit}")
+                                
+                                cx_e, cy_e, cz_e = st.columns(3)
+                                cats = ["Insumos", "Transporte", "Tercero", "Empleado", "Servicios", "Arriendo", "Otros"]
+                                idx_cat = cats.index(val_g['tipo']) if val_g['tipo'] in cats else 0
+                                e_tipo = cx_e.selectbox("Categoría", cats, index=idx_cat, key=f"e_tip_{id_gasto_edit}")
+                                
+                                e_factura = cy_e.selectbox("¿Factura?", ["NO", "SI"], index=0 if val_g['factura_e'] == "NO" else 1, key=f"e_fac_{id_gasto_edit}")
+                                e_medio = cz_e.selectbox("Medio Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], index=["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"].index(val_g['medio']) if val_g['medio'] in ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"] else 0, key=f"e_med_{id_gasto_edit}")
+                                
+                                if st.form_submit_button("💾 ACTUALIZAR REGISTRO DE GASTO", use_container_width=True):
+                                    payload_edit = {
+                                        "accion": "actualizar",
+                                        "tipo_registro": "gastos",
+                                        "id_busqueda": str(id_gasto_edit),
+                                        "empresa": e_proveedor.upper(),
+                                        "valor_total": float(e_v_total),
+                                        "abono": float(e_abono_acumulado),
+                                        "saldo": float(e_nuevo_saldo),
+                                        "tipo": e_tipo,
+                                        "factura_e": e_factura,
+                                        "descripcion": e_detalles,
+                                        "medio": e_medio
+                                    }
+                                    
+                                    if enviar_google(payload_edit):
+                                        st.success(f"✅ Gasto N° {id_gasto_edit} actualizado con éxito.")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Error de comunicación al actualizar.")
+                        except Exception as err:
+                            st.error(f"⚠️ Error al cargar los datos de este gasto: {err}")
                 else:
                     st.info("No hay registros de gastos almacenados en el sistema.")
 
