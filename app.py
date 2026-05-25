@@ -35,7 +35,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxcdHPY-IJ7osEk8dwzskzGyW1NgsuMW3EjditIGac-yHneHWT-KnsRhfKCYwMvwKPngA/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbz6Kr8di5Tdn2CNPNFTtaaIAHjomEXiXSyCLH6WRu3ewyVM12qpaXhVUcji82t8ZSp3GA/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -176,7 +176,7 @@ def leer_datos(pestana):
 
         # --- BLOQUE NUEVO: GASTOS ---
         elif pestana == "gastos":
-            cols_g = ['fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
+            cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
             df = df.iloc[:, :len(cols_g)]
             df.columns = cols_g
             df['total_n'] = df['valor_total'].apply(a_numero)
