@@ -568,65 +568,143 @@ if opcion == "Ventas":
     # --- PESTAÑA 3: GESTIÓN DE GASTOS ---
     if st.session_state['rol'] == 'admin':
         with tabs[3]:
-            st.subheader("💸 Registro de Gastos Operativos")
+            st.subheader("💸 Módulo de Gastos Operativos")
             
-            with st.form("form_gastos_empresa", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                f_gasto = c1.date_input("Fecha", value=fecha_hoy_col)
-                proveedor = c2.text_input("Proveedor / Concepto")
-                
-                c3, c4, c_s = st.columns(3)
-                v_total = c3.text_input("Valor Total del Gasto", value="0")
-                v_abono = c4.text_input("¿Cuánto pagas hoy? (Abono)", value="0")
-                
-                # Cálculo automático de saldo
-                total_n = a_numero(v_total)
-                abono_n = a_numero(v_abono)
-                saldo_n = total_n - abono_n
-                
-                c_s.metric("Deuda (Saldo)", formato_pesos(saldo_n))
-                
-                # Definición de inputs restantes que faltaban en tu fragmento
-                detalles = st.text_area("Descripción o notas del gasto")
-                
-                cx, cy, cz = st.columns(3)
-                tipo_gasto = cx.selectbox("Categoría", ["Transporte", "Tercero", "Empleado", "Insumos", "Servicios", "Arriendo", "Otros"])
-                es_factura = cy.selectbox("¿Factura Electrónica?", ["NO", "SI"])
-                metodo_g = cz.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"])
-                
-                if st.form_submit_button("💾 GUARDAR GASTO"):
-                    if not proveedor or total_n <= 0:
-                        st.error("⚠️ Debes indicar el proveedor y un valor mayor a cero.")
-                    else:
-                        datos_gasto = {
-                            "accion": "insertar",
-                            "tipo_registro": "gastos",
-                            "fecha": f_gasto.strftime("%d/%m/%Y"),
-                            "empresa": proveedor.upper(),
-                            "valor_total": float(total_n),
-                            "abono": float(abono_n),
-                            "saldo": float(saldo_n),
-                            "tipo": tipo_gasto,
-                            "factura_e": es_factura,
-                            "descripcion": detalles,
-                            "medio": metodo_g
-                        }
-                        
-                        # Aquí la indentación debe ser exactamente igual a la de arriba
-                        if enviar_google(datos_gasto):
-                            st.success("✅ Gasto registrado y guardado en la nube.")
-                            st.rerun()
+            # Dividimos la pantalla en dos columnas funcionales
+            col_izq, col_der = st.columns(2)
+            
+            # --- COLUMNA IZQUIERDA: CREAR GASTO ---
+            with col_izq:
+                st.markdown("### 📝 Registrar Nuevo Gasto")
+                with st.form("form_gastos_empresa", clear_on_submit=True):
+                    f_gasto = st.date_input("Fecha", value=fecha_hoy_col, key="g_fec")
+                    proveedor = st.text_input("Proveedor / Concepto", key="g_prov")
+                    
+                    c3, c4 = st.columns(2)
+                    v_total = c3.text_input("Valor Total del Gasto", value="0", key="g_tot")
+                    v_abono = c4.text_input("¿Cuánto pagas hoy? (Abono)", value="0", key="g_abo")
+                    
+                    total_n = a_numero(v_total)
+                    abono_n = a_numero(v_abono)
+                    saldo_n = total_n - abono_n
+                    
+                    st.metric("Deuda Generada (Saldo)", formato_pesos(saldo_n))
+                    detalles = st.text_area("Descripción o notas", key="g_desc")
+                    
+                    cx, cy, cz = st.columns(3)
+                    tipo_gasto = cx.selectbox("Categoría", ["Insumos", "Transporte", "Tercero", "Empleado", "Servicios", "Arriendo", "Otros"], key="g_tip")
+                    es_factura = cy.selectbox("¿Factura Elec.?", ["NO", "SI"], key="g_fac")
+                    metodo_g = cz.selectbox("Medio de Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="g_med")
+                    
+                    if st.form_submit_button("💾 GUARDAR NUEVO GASTO", use_container_width=True):
+                        if not proveedor or total_n <= 0:
+                            st.error("⚠️ Indica el proveedor y un valor válido.")
                         else:
-                            st.error("❌ Error de conexión al guardar.")
+                            datos_gasto = {
+                                "accion": "insertar",
+                                "tipo_registro": "gastos",
+                                "fecha": f_gasto.strftime("%d/%m/%Y"),
+                                "empresa": proveedor.upper(),
+                                "valor_total": float(total_n),
+                                "abono": float(abono_n),
+                                "saldo": float(saldo_n),
+                                "tipo": tipo_gasto,
+                                "factura_e": es_factura,
+                                "descripcion": detalles,
+                                "medio": metodo_g
+                            }
+                            if enviar_google(datos_gasto):
+                                st.success("✅ Gasto guardado correctamente.")
+                                st.rerun()
+                            else:
+                                st.error("❌ Error al guardar en la nube.")
 
-            # --- TABLA DE GASTOS RECIENTES ---
+            # --- COLUMNA DERECHA: BUSCAR Y EDITAR/ABONAR GASTO ---
+            with col_der:
+                st.markdown("### ✏️ Editar / Abonar a Gasto existente")
+                if not df_gastos.empty:
+                    # Buscador interactivo por ID (N° de gasto) o por Proveedor
+                    opciones_gasto = ["Seleccionar..."] + [f"{row['id_gasto']} - {row['empresa']} (Saldo: {formato_pesos(row['saldo_n'])})" for _, row in df_gastos.iterrows()]
+                    gasto_sel = st.selectbox("Buscar Gasto por Número o Proveedor:", opciones_gasto)
+                    
+                    if gasto_sel != "Seleccionar...":
+                        id_gasto_edit = gasto_sel.split(" - ")[0]
+                        val_g = df_gastos[df_gastos['id_gasto'].astype(str) == str(id_gasto_edit)].iloc[0]
+                        
+                        st.info(f"Modificando Gasto N°: **{id_gasto_edit}**")
+                        
+                        with st.form("form_editar_gasto"):
+                            e_proveedor = st.text_input("Proveedor / Concepto", value=val_g['empresa'])
+                            
+                            c_val1, c_val2 = st.columns(2)
+                            e_v_total = a_numero(c_val1.text_input("Valor Total ($ COP)", value=str(int(val_g['total_n']))))
+                            
+                            # Muestra cuánto se ha pagado en total históricamente
+                            st.markdown(f"**Abonado anteriormente:** {formato_pesos(val_g['abono_n'])}")
+                            e_nuevo_abono = a_numero(st.text_input("Añadir nuevo abono ($ COP)", value="0"))
+                            
+                            # Recálculos automáticos del nuevo saldo
+                            e_abono_acumulado = val_g['abono_n'] + e_nuevo_abono
+                            e_nuevo_saldo = e_v_total - e_abono_acumulado
+                            
+                            st.warning(f"Saldo Pendiente Anterior: {formato_pesos(val_g['saldo_n'])} | **Nuevo Saldo: {formato_pesos(e_nuevo_saldo)}**")
+                            
+                            e_detalles = st.text_area("Descripción o notas", value=val_g['descripcion'])
+                            
+                            cx_e, cy_e, cz_e = st.columns(3)
+                            cats = ["Insumos", "Transporte", "Tercero", "Empleado", "Servicios", "Arriendo", "Otros"]
+                            idx_cat = cats.index(val_g['tipo']) if val_g['tipo'] in cats else 0
+                            e_tipo = cx_e.selectbox("Categoría", cats, index=idx_cat)
+                            
+                            e_factura = cy_e.selectbox("¿Factura?", ["NO", "SI"], index=0 if val_g['factura_e'] == "NO" else 1)
+                            e_medio = cz_e.selectbox("Medio Pago", ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], index=["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"].index(val_g['medio']) if val_g['medio'] in ["EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"] else 0)
+                            
+                            if st.form_submit_button("💾 ACTUALIZAR REGISTRO DE GASTO", use_container_width=True):
+                                payload_edit = {
+                                    "accion": "actualizar",
+                                    "tipo_registro": "gastos",
+                                    "id_busqueda": str(id_gasto_edit),
+                                    "empresa": e_proveedor.upper(),
+                                    "valor_total": float(e_v_total),
+                                    "abono": float(e_abono_acumulado),
+                                    "saldo": float(e_nuevo_saldo),
+                                    "tipo": e_tipo,
+                                    "factura_e": e_factura,
+                                    "descripcion": e_detalles,
+                                    "medio": e_medio
+                                }
+                                
+                                if enviar_google(payload_edit):
+                                    st.success(f"✅ Gasto N° {id_gasto_edit} actualizado con éxito.")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Error de comunicación al actualizar.")
+                else:
+                    st.info("No hay registros de gastos almacenados en el sistema.")
+
+            # --- TABLA COMPLETA DE SEGUIMIENTO EN LA PARTE INFERIOR ---
             if not df_gastos.empty:
                 st.markdown("---")
-                st.write("### 📜 Últimos Gastos Registrados")
-                # Mostramos los últimos 10 gastos
+                st.write("### 📜 Historial y Buscador de Gastos")
+                
+                # Barra de búsqueda unificada para buscar por ID de gasto o Nombre de proveedor
+                busq_gasto = st.text_input("🔍 Filtrar historial por N° Gasto o Proveedor:")
+                df_g_visualizar = df_gastos.copy()
+                if busq_gasto:
+                    df_g_visualizar = df_g_visualizar[
+                        df_g_visualizar['id_gasto'].astype(str).str.contains(busq_gasto, case=False) | 
+                        df_g_visualizar['empresa'].astype(str).str.contains(busq_gasto, case=False)
+                    ]
+                
                 st.dataframe(
-                    df_gastos.sort_values('fecha_dt', ascending=False).head(10),
-                    column_order=("fecha", "empresa", "valor_total", "abono", "saldo", "tipo", "descripcion", "medio", "factura_e"),
+                    df_g_visualizar.sort_values('id_gasto', ascending=False),
+                    column_order=("id_gasto", "fecha", "empresa", "valor_total", "abono", "saldo", "tipo", "descripcion", "medio"),
+                    column_config={
+                        "id_gasto": "N° Gasto",
+                        "valor_total": "Valor Total",
+                        "abono": "Abonado",
+                        "saldo": "Saldo Pendiente"
+                    },
                     hide_index=True,
                     use_container_width=True
                 )
