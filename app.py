@@ -147,54 +147,68 @@ def a_numero(valor):
 
 def leer_datos(pestana):
     try:
-        # Usamos microsegundos para evitar el caché de Google
-        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
-        res = requests.get(url, timeout=10)
-        df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
+        # Hacemos una consulta segura a tu Apps Script pidiendo la pestaña correspondiente
+        respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=15)
         
-        if pestana == "ventas":
-            cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
-            df = df.iloc[:, :len(cols)]
-            df.columns = cols
-            df['total_n'] = df['total'].apply(a_numero)
-            df['abono_n'] = df['abono'].apply(a_numero)
-            df['saldo_n'] = df['total_n'] - df['abono_n']
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df['solo_dia'] = df['fecha_dt'].dt.date
+        if respuesta.status_code == 200:
+            datos_json = respuesta.json()
             
-        elif pestana == "usuarios":
-            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+            # Si hay un error interno o la lista está vacía, devolvemos una tabla en blanco
+            if (isinstance(datos_json, dict) and "error" in datos_json) or len(datos_json) == 0:
+                return pd.DataFrame()
             
-        elif pestana == "caja":
-            cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-            df = df.iloc[:, :len(cols_caja)]
-            df.columns = cols_caja
-            df['valor_n'] = df['valor'].apply(a_numero)
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df = df.dropna(subset=['fecha_dt'])
-            df['solo_dia'] = df['fecha_dt'].dt.date
+            # El Apps Script nos devuelve una matriz. La fila 0 son los títulos (columnas)
+            columnas = datos_json[0]
+            filas = datos_json[1:]
+            
+            # Convertimos la matriz en una tabla de Pandas (DataFrame) con textos limpios
+            df = pd.DataFrame(filas, columns=columnas).astype(str)
+            df = df.replace('None', '').fillna('')
+            
+            # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS (Mantiene tu lógica intacta) ---
+            if pestana == "ventas":
+                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
+                df = df.iloc[:, :len(cols)]
+                df.columns = cols
+                df['total_n'] = df['total'].apply(a_numero)
+                df['abono_n'] = df['abono'].apply(a_numero)
+                df['saldo_n'] = df['total_n'] - df['abono_n']
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df['solo_dia'] = df['fecha_dt'].dt.date
+                
+            elif pestana == "usuarios":
+                df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+                
+            elif pestana == "caja":
+                cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+                df = df.iloc[:, :len(cols_caja)]
+                df.columns = cols_caja
+                df['valor_n'] = df['valor'].apply(a_numero)
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['fecha_dt'])
+                df['solo_dia'] = df['fecha_dt'].dt.date
 
-        # --- BLOQUE NUEVO: GASTOS ---
-        elif pestana == "gastos":
-            cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-            df = df.iloc[:, :len(cols_g)]
-            df.columns = cols_g
-            df['total_n'] = df['valor_total'].apply(a_numero)
-            df['abono_n'] = df['abono'].apply(a_numero)
-            df['saldo_n'] = df['saldo'].apply(a_numero)
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df['solo_dia'] = df['fecha_dt'].dt.date
-        # ----------------------------
-        
-        elif pestana == "horarios":
-            if not df.empty:
-                df = df.iloc[:, :4] 
-                df.columns = ['fecha', 'empleado', 'evento', 'hora']
-            else:
-                return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
+            elif pestana == "gastos":
+                cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
+                df = df.iloc[:, :len(cols_g)]
+                df.columns = cols_g
+                df['total_n'] = df['valor_total'].apply(a_numero)
+                df['abono_n'] = df['abono'].apply(a_numero)
+                df['saldo_n'] = df['saldo'].apply(a_numero)
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df['solo_dia'] = df['fecha_dt'].dt.date
             
-        return df
-    except: 
+            elif pestana == "horarios":
+                if not df.empty:
+                    df = df.iloc[:, :4] 
+                    df.columns = ['fecha', 'empleado', 'evento', 'hora']
+                else:
+                    return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
+                
+            return df
+        return pd.DataFrame()
+    except Exception as e: 
+        print(f"Error leyendo pestaña {pestana}: {e}")
         return pd.DataFrame()
 
 def enviar_google(payload):
