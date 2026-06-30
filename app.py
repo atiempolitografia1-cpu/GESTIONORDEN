@@ -336,7 +336,7 @@ if opcion == "Ventas":
                     "estado": str(est), "empleado": str(st.session_state['usuario']),
                     "cliente": str(cli), "nit": str(nit), "celular": str(cel),
                     "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial
-                    "diseno": str(diseno) # Guardamos el diseño seleccionado
+                    "diseno": str(diseno)
                 }
                 p_caja = {
                     "accion": "insertar", "tipo_registro": "caja", "fecha": fecha_str,
