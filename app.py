@@ -335,8 +335,7 @@ if opcion == "Ventas":
                     "abono": float(abo), "saldo": float(tot - abo), "metodo_pago": str(pag),
                     "estado": str(est), "empleado": str(st.session_state['usuario']),
                     "cliente": str(cli), "nit": str(nit), "celular": str(cel),
-                    "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial
-                    "diseno": str(diseno)
+                    "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial, "diseno": str(diseno)
                 }
                 p_caja = {
                     "accion": "insertar", "tipo_registro": "caja", "fecha": fecha_str,
