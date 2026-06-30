@@ -35,7 +35,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbz6Kr8di5Tdn2CNPNFTtaaIAHjomEXiXSyCLH6WRu3ewyVM12qpaXhVUcji82t8ZSp3GA/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzhTgvKp2veoUh3spt5xrc0-a-wy-VjsuaimbSdd_7tO4Bq7p8YQdcQAtbmXDFPDzFXgA/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -167,7 +167,7 @@ def leer_datos(pestana):
             
             # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS (Mantiene tu lógica intacta) ---
             if pestana == "ventas":
-                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
+                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
                 df = df.iloc[:, :len(cols)]
                 df.columns = cols
                 df['total_n'] = df['total'].apply(a_numero)
@@ -314,10 +314,11 @@ if opcion == "Ventas":
         c6.markdown(f'<div class="money-helper">{formato_pesos(tot)}</div>', unsafe_allow_html=True)
         c7.markdown(f'<div class="money-helper">{formato_pesos(abo)}</div>', unsafe_allow_html=True)
         desc = st.text_area("Descripción del Trabajo", key="d"+v)
-        c8, c9, c10 = st.columns(3)
+        c8, c9, c10 = st.columns(4)
         est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "ENTREGADO"], key="e"+v)
         pag = c9.selectbox("Método de Pago", ["SIN ABONO", "EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
+        diseno = c11.selectbox("Diseño", ["ninguno", "sencillo", "medio", "alta complejidad"], key="dis"+v) # Casilla nueva
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if abo > 0 and pag == "SIN ABONO":
@@ -335,6 +336,7 @@ if opcion == "Ventas":
                     "estado": str(est), "empleado": str(st.session_state['usuario']),
                     "cliente": str(cli), "nit": str(nit), "celular": str(cel),
                     "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial
+                    "diseno": str(diseno) # Guardamos el diseño seleccionado
                 }
                 p_caja = {
                     "accion": "insertar", "tipo_registro": "caja", "fecha": fecha_str,
