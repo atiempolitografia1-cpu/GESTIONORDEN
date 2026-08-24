@@ -235,20 +235,29 @@ def enviar_google(payload):
 # --- 3. LOGIN ---
 # --- 3. LOGIN PROTEGIDO ---
 # --- 3. LOGIN CON LIMPIEZA DE CACHÉ ---
+# --- 3. LOGIN LECTURA DIRECTA ---
 if 'autenticado' not in st.session_state: 
     st.session_state['autenticado'] = False
 
-# Limpiamos la memoria si detectamos que no hay datos
 df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
-    # Extraemos nombres omitiendo celdas vacías y encabezados mal puestos
+    # 1. Extraer todos los nombres directamente de la primera columna
     u_list = []
-    if not df_users_db.empty and 'nombre' in df_users_db.columns:
-        u_list = [usr for usr in df_users_db['nombre'].dropna().unique().tolist() if usr.strip() and usr.lower() != 'nombre']
-    
+    if not df_users_db.empty:
+        # Toma la primera columna sin importar cómo se llame el encabezado
+        primer_columna = df_users_db.iloc[:, 0].dropna().astype(str).tolist()
+        
+        # Filtra encabezados genéricos y espacios en blanco
+        for u in primer_columna:
+            u_clean = u.strip()
+            if u_clean and u_clean.lower() not in ['nombre', 'usuario', 'user', 'none', '']:
+                if u_clean not in u_list:
+                    u_list.append(u_clean)
+
+    # Si por alguna razón la hoja está 100% vacía, deja Administrador
     if not u_list:
         u_list = ["Administrador"]
 
@@ -257,29 +266,39 @@ if not st.session_state['autenticado']:
         p_input = st.text_input("Contraseña", type="password")
         
         if st.form_submit_button("INGRESAR", use_container_width=True):
-            # Caso especial si la lista vino vacía
-            if df_users_db.empty or 'nombre' not in df_users_db.columns:
+            if df_users_db.empty:
                 if u_input == "Administrador" and p_input == "admin123":
                     st.session_state.update({"autenticado": True, "usuario": "Administrador", "rol": "admin"})
                     st.rerun()
                 else:
-                    st.error("❌ Contraseña incorrecta para Administrador")
-            else:
-                user_data = df_users_db[df_users_db['nombre'].str.strip() == str(u_input).strip()]
-                if not user_data.empty and str(user_data.iloc[0]['clave']).strip() == str(p_input).strip():
-                    st.session_state.update({
-                        "autenticado": True, 
-                        "usuario": u_input, 
-                        "rol": str(user_data.iloc[0]['rol']).lower()
-                    })
-                    st.rerun()
-                else: 
                     st.error("❌ Contraseña incorrecta")
+            else:
+                # Compara el usuario seleccionado con la primera columna
+                user_match = df_users_db[df_users_db.iloc[:, 0].astype(str).str.strip() == str(u_input).strip()]
+                
+                if not user_match.empty:
+                    # Toma la contraseña (columna 2 / índice 1)
+                    clave_real = str(user_match.iloc[0, 1]).strip()
+                    # Toma el rol (columna 3 / índice 2)
+                    rol_real = str(user_match.iloc[0, 2]).strip().lower() if user_match.shape[1] > 2 else "empleado"
+                    
+                    if str(p_input).strip() == clave_real:
+                        st.session_state.update({
+                            "autenticado": True, 
+                            "usuario": u_input, 
+                            "rol": rol_real
+                        })
+                        st.rerun()
+                    else:
+                        st.error("❌ Contraseña incorrecta")
+                else:
+                    st.error("❌ Usuario no encontrado")
 
-    # Botón para forzar actualización si agregaste un usuario nuevo en Google Sheets
-    if st.button("🔄 Recargar Lista de Usuarios desde Google", use_container_width=True):
+    if st.button("🔄 Limpiar Caché y Forzar Lectura", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+
+    st.stop()
 
     st.stop()
 # --- 4. INTERFAZ ---
