@@ -234,18 +234,22 @@ def enviar_google(payload):
 
 # --- 3. LOGIN ---
 # --- 3. LOGIN PROTEGIDO ---
+# --- 3. LOGIN CON LIMPIEZA DE CACHÉ ---
 if 'autenticado' not in st.session_state: 
     st.session_state['autenticado'] = False
 
+# Limpiamos la memoria si detectamos que no hay datos
 df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
-    # Si la tabla de usuarios está vacía, permite crear lista segura
+    # Extraemos nombres omitiendo celdas vacías y encabezados mal puestos
+    u_list = []
     if not df_users_db.empty and 'nombre' in df_users_db.columns:
-        u_list = df_users_db['nombre'].dropna().unique().tolist()
-    else:
+        u_list = [usr for usr in df_users_db['nombre'].dropna().unique().tolist() if usr.strip() and usr.lower() != 'nombre']
+    
+    if not u_list:
         u_list = ["Administrador"]
 
     with st.form("login"):
@@ -253,7 +257,7 @@ if not st.session_state['autenticado']:
         p_input = st.text_input("Contraseña", type="password")
         
         if st.form_submit_button("INGRESAR", use_container_width=True):
-            # Acceso directo de emergencia si la BD está vacía o falla la conexión
+            # Caso especial si la lista vino vacía
             if df_users_db.empty or 'nombre' not in df_users_db.columns:
                 if u_input == "Administrador" and p_input == "admin123":
                     st.session_state.update({"autenticado": True, "usuario": "Administrador", "rol": "admin"})
@@ -261,7 +265,7 @@ if not st.session_state['autenticado']:
                 else:
                     st.error("❌ Contraseña incorrecta para Administrador")
             else:
-                user_data = df_users_db[df_users_db['nombre'] == u_input]
+                user_data = df_users_db[df_users_db['nombre'].str.strip() == str(u_input).strip()]
                 if not user_data.empty and str(user_data.iloc[0]['clave']).strip() == str(p_input).strip():
                     st.session_state.update({
                         "autenticado": True, 
@@ -270,9 +274,14 @@ if not st.session_state['autenticado']:
                     })
                     st.rerun()
                 else: 
-                    st.error("❌ Datos incorrectos")
-    st.stop()
+                    st.error("❌ Contraseña incorrecta")
 
+    # Botón para forzar actualización si agregaste un usuario nuevo en Google Sheets
+    if st.button("🔄 Recargar Lista de Usuarios desde Google", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+    st.stop()
 # --- 4. INTERFAZ ---
 with st.sidebar:
     # 1. Colocamos el logo al principio de la barra lateral
