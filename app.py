@@ -35,7 +35,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxrDb7d8ChOnPBDHQotFhAKFDANM7VB8xn815al9viWZqWhNmkwGSYk3uGDMqkTKbUNhg/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbzhTgvKp2veoUh3spt5xrc0-a-wy-VjsuaimbSdd_7tO4Bq7p8YQdcQAtbmXDFPDzFXgA/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -145,97 +145,53 @@ def a_numero(valor):
         return float(s) if s else 0.0
     except: return 0.0
 
-# --- 2. FUNCIONES OPTIMIZADAS CON CACHÉ (Tiempos de respuesta ultra rápidos) ---
-
-@st.cache_data(ttl=10, show_spinner=False)
-def descargar_todas_las_tablas():
-    """Descarga toda la base de datos de Google en 1 sola consulta HTTP."""
-    try:
-        respuesta = requests.get(URL_SCRIPT, params={"tabla": "todas"}, timeout=10)
-        if respuesta.status_code == 200:
-            return respuesta.json()
-    except Exception as e:
-        print(f"Error descargando base de datos: {e}")
-    return {}
-
 def leer_datos(pestana):
     try:
-        # Petición directa a la URL del Apps Script por cada pestaña
-        respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=10)
+        # Hacemos una consulta segura a tu Apps Script pidiendo la pestaña correspondiente
+        respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=15)
         
         if respuesta.status_code == 200:
             datos_json = respuesta.json()
             
-            if not datos_json or len(datos_json) <= 1:
+            # Si hay un error interno o la lista está vacía, devolvemos una tabla en blanco
+            if (isinstance(datos_json, dict) and "error" in datos_json) or len(datos_json) == 0:
                 return pd.DataFrame()
             
+            # El Apps Script nos devuelve una matriz. La fila 0 son los títulos (columnas)
             columnas = datos_json[0]
             filas = datos_json[1:]
             
+            # Convertimos la matriz en una tabla de Pandas (DataFrame) con textos limpios
             df = pd.DataFrame(filas, columns=columnas).astype(str)
-            # Limpiamos espacios en blanco accidentales en todos los textos
-            df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
             df = df.replace('None', '').fillna('')
             
-            # --- EVALUACIÓN DE PESTAÑAS ---
+            # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS (Mantiene tu lógica intacta) ---
             if pestana == "ventas":
                 cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
-    
-                if not df.empty:
-                    num_cols_reales = min(df.shape[1], len(cols))
-                    df = df.iloc[:, :num_cols_reales]
-                    df.columns = cols[:num_cols_reales]
-
-                # Asigna columnas faltantes para evitar KeyErrors
-                for col in cols:
-                    if col not in df.columns:
-                        df[col] = ""
-
-                # Creación segura de columnas numéricas y de fecha
-                df['total_n'] = df['total'].apply(a_numero) if 'total' in df.columns else 0.0
-                df['abono_n'] = df['abono'].apply(a_numero) if 'abono' in df.columns else 0.0
+                df = df.iloc[:, :len(cols)]
+                df.columns = cols
+                df['total_n'] = df['total'].apply(a_numero)
+                df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['total_n'] - df['abono_n']
-    
-                if 'fecha' in df.columns:
-                    df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                    df['solo_dia'] = df['fecha_dt'].dt.date
-                else:
-                    df['fecha_dt'] = pd.NaT
-                    df['solo_dia'] = None
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df['solo_dia'] = df['fecha_dt'].dt.date
                 
             elif pestana == "usuarios":
-                if df.shape[1] >= 3:
-                    df = df.iloc[:, :3]
-                    df.columns = ['nombre', 'clave', 'rol']
-                elif df.shape[1] == 2:
-                    df = df.iloc[:, :2]
-                    df.columns = ['nombre', 'clave']
-                    df['rol'] = 'empleado'
+                df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
                 
             elif pestana == "caja":
                 cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-                if not df.empty:
-                    num_cols = min(df.shape[1], len(cols_caja))
-                    df = df.iloc[:, :num_cols]
-                    df.columns = cols_caja[:num_cols]
-                for col in cols_caja:
-                    if col not in df.columns:
-                        df[col] = ""
-
+                df = df.iloc[:, :len(cols_caja)]
+                df.columns = cols_caja
                 df['valor_n'] = df['valor'].apply(a_numero)
                 df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['fecha_dt'])
                 df['solo_dia'] = df['fecha_dt'].dt.date
 
             elif pestana == "gastos":
                 cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-                if not df.empty:
-                    num_cols = min(df.shape[1], len(cols_g))
-                    df = df.iloc[:, :num_cols]
-                    df.columns = cols_g[:num_cols]
-                for col in cols_g:
-                    if col not in df.columns:
-                        df[col] = ""
-
+                df = df.iloc[:, :len(cols_g)]
+                df.columns = cols_g
                 df['total_n'] = df['valor_total'].apply(a_numero)
                 df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['saldo'].apply(a_numero)
@@ -254,74 +210,31 @@ def leer_datos(pestana):
     except Exception as e: 
         print(f"Error leyendo pestaña {pestana}: {e}")
         return pd.DataFrame()
+
 def enviar_google(payload):
-    """Envía cambios a Google e inValida la caché para refrescar al instante."""
     try:
-        res = requests.post(URL_SCRIPT, json=payload, timeout=12)
-        if res.status_code == 200:
-            st.cache_data.clear()  # <-- Limpia la memoria caché para forzar la actualización de datos
-            return True
-    except: 
-        pass
-    return False
+        res = requests.post(URL_SCRIPT, json=payload, timeout=15)
+        return res.status_code == 200
+    except: return False
 
 # --- 3. LOGIN ---
-# --- 3. LOGIN CON CARGA FORZADA DE USUARIOS ---
-if 'autenticado' not in st.session_state: 
-    st.session_state['autenticado'] = False
-
-# 1. Leemos los usuarios
+if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 df_users_db = leer_datos("usuarios")
-
-# 2. Si viene vacío o solo trae encabezados, intentamos una re-lectura sin caché
-if df_users_db.empty or len(df_users_db) <= 1:
-    st.cache_data.clear()
-    df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
-    
-    u_list = []
-    if not df_users_db.empty:
-        # Obtenemos la primera columna sin importar cómo se llame (Columna A)
-        col_nombres = df_users_db.iloc[:, 0].dropna().astype(str).tolist()
-        for u in col_nombres:
-            u_limpio = u.strip()
-            # Omitimos celdas vacías o la palabra 'nombre'/'usuario' de la cabecera
-            if u_limpio and u_limpio.lower() not in ['nombre', 'usuario', 'user', 'none'] and u_limpio not in u_list:
-                u_list.append(u_limpio)
-
-    # Si por algún fallo extremo sigue vacío, dejamos solo Administrador
-    if not u_list:
-        u_list = ["Administrador"]
-
     with st.form("login"):
+        u_list = df_users_db['nombre'].unique().tolist() if not df_users_db.empty else ["Administrador"]
         u_input = st.selectbox("Usuario", u_list)
         p_input = st.text_input("Contraseña", type="password")
-        
         if st.form_submit_button("INGRESAR", use_container_width=True):
-            # Buscamos al usuario seleccionado comparando la Columna A
-            user_data = df_users_db[df_users_db.iloc[:, 0].astype(str).str.strip().str.lower() == str(u_input).strip().lower()]
-            
-            if not user_data.empty:
-                # Columna B es clave (índice 1), Columna C es rol (índice 2)
-                clave_real = str(user_data.iloc[0, 1]).strip()
-                rol_real = str(user_data.iloc[0, 2]).strip().lower() if user_data.shape[1] > 2 else "empleado"
-                
-                if str(p_input).strip() == clave_real:
-                    st.session_state.update({
-                        "autenticado": True, 
-                        "usuario": u_input, 
-                        "rol": rol_real
-                    })
-                    st.rerun()
-                else:
-                    st.error("❌ Contraseña incorrecta")
-            else:
-                st.error("❌ Usuario no encontrado")
-
+            user_data = df_users_db[df_users_db['nombre'] == u_input]
+            if not user_data.empty and str(user_data.iloc[0]['clave']).strip() == str(p_input).strip():
+                st.session_state.update({"autenticado": True, "usuario": u_input, "rol": str(user_data.iloc[0]['rol']).lower()})
+                st.rerun()
+            else: st.error("❌ Datos incorrectos")
     st.stop()
-    
+
 # --- 4. INTERFAZ ---
 with st.sidebar:
     # 1. Colocamos el logo al principio de la barra lateral
@@ -346,10 +259,7 @@ if opcion == "Ventas":
     if st.session_state['rol'] == 'admin':
         df_v = df_v_comp.copy()
     else:
-        if not df_v_comp.empty and 'empleado' in df_v_comp.columns:
-            df_v = df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']].copy()
-        else:
-            df_v = df_v_comp.copy()
+        df_v = df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']].copy()
     
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': 
