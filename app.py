@@ -179,29 +179,29 @@ def leer_datos(pestana):
             
             # --- EVALUACIÓN DE PESTAÑAS ---
             if pestana == "ventas":
-    cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
+                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
     
-    if not df.empty:
-        num_cols_reales = min(df.shape[1], len(cols))
-        df = df.iloc[:, :num_cols_reales]
-        df.columns = cols[:num_cols_reales]
+                if not df.empty:
+                    num_cols_reales = min(df.shape[1], len(cols))
+                    df = df.iloc[:, :num_cols_reales]
+                    df.columns = cols[:num_cols_reales]
 
     # Asigna columnas faltantes para evitar KeyErrors
-    for col in cols:
-        if col not in df.columns:
-            df[col] = ""
+                for col in cols:
+                if col not in df.columns:
+                    df[col] = ""
 
     # Creación segura de columnas numéricas y de fecha
-    df['total_n'] = df['total'].apply(a_numero) if 'total' in df.columns else 0.0
-    df['abono_n'] = df['abono'].apply(a_numero) if 'abono' in df.columns else 0.0
-    df['saldo_n'] = df['total_n'] - df['abono_n']
+               df['total_n'] = df['total'].apply(a_numero) if 'total' in df.columns else 0.0
+               df['abono_n'] = df['abono'].apply(a_numero) if 'abono' in df.columns else 0.0
+               df['saldo_n'] = df['total_n'] - df['abono_n']
     
-    if 'fecha' in df.columns:
-        df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-        df['solo_dia'] = df['fecha_dt'].dt.date
-    else:
-        df['fecha_dt'] = pd.NaT
-        df['solo_dia'] = None
+               if 'fecha' in df.columns:
+                   df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                   df['solo_dia'] = df['fecha_dt'].dt.date
+               else:
+                   df['fecha_dt'] = pd.NaT
+                   df['solo_dia'] = None
                 
             elif pestana == "usuarios":
                 if df.shape[1] >= 3:
