@@ -186,22 +186,22 @@ def leer_datos(pestana):
                     df = df.iloc[:, :num_cols_reales]
                     df.columns = cols[:num_cols_reales]
 
-    # Asigna columnas faltantes para evitar KeyErrors
+                # Asigna columnas faltantes para evitar KeyErrors
                 for col in cols:
-                if col not in df.columns:
-                    df[col] = ""
+                    if col not in df.columns:
+                        df[col] = ""
 
-    # Creación segura de columnas numéricas y de fecha
-               df['total_n'] = df['total'].apply(a_numero) if 'total' in df.columns else 0.0
-               df['abono_n'] = df['abono'].apply(a_numero) if 'abono' in df.columns else 0.0
-               df['saldo_n'] = df['total_n'] - df['abono_n']
+                # Creación segura de columnas numéricas y de fecha
+                df['total_n'] = df['total'].apply(a_numero) if 'total' in df.columns else 0.0
+                df['abono_n'] = df['abono'].apply(a_numero) if 'abono' in df.columns else 0.0
+                df['saldo_n'] = df['total_n'] - df['abono_n']
     
-               if 'fecha' in df.columns:
-                   df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                   df['solo_dia'] = df['fecha_dt'].dt.date
-               else:
-                   df['fecha_dt'] = pd.NaT
-                   df['solo_dia'] = None
+                if 'fecha' in df.columns:
+                    df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                    df['solo_dia'] = df['fecha_dt'].dt.date
+                else:
+                    df['fecha_dt'] = pd.NaT
+                    df['solo_dia'] = None
                 
             elif pestana == "usuarios":
                 if df.shape[1] >= 3:
