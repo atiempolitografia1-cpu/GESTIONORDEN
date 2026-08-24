@@ -159,66 +159,68 @@ def descargar_todas_las_tablas():
     return {}
 
 def leer_datos(pestana):
-    """Procesa los datos desde la caché local sin sobrecargar la red."""
     try:
-        base_datos = descargar_todas_las_tablas()
-        datos_json = base_datos.get(pestana, [])
+        # Petición directa a la URL del Apps Script por cada pestaña
+        respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=10)
         
-        if not datos_json or len(datos_json) <= 1:
-            return pd.DataFrame()
-        
-        columnas = datos_json[0]
-        filas = datos_json[1:]
-        
-        df = pd.DataFrame(filas, columns=columnas).astype(str)
-        df = df.replace('None', '').fillna('')
-        
-        if pestana == "ventas":
-            cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
-            df = df.iloc[:, :len(cols)]
-            df.columns = cols
-            df['total_n'] = df['total'].apply(a_numero)
-            df['abono_n'] = df['abono'].apply(a_numero)
-            df['saldo_n'] = df['total_n'] - df['abono_n']
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df['solo_dia'] = df['fecha_dt'].dt.date
+        if respuesta.status_code == 200:
+            datos_json = respuesta.json()
             
-        elif pestana == "usuarios":
-            if not df.empty and len(df.columns) >= 3:
-                df = df.iloc[:, :3]
-                df.columns = ['nombre', 'clave', 'rol']
-            else:
-                return pd.DataFrame(columns=['nombre', 'clave', 'rol'])
+            if not datos_json or len(datos_json) <= 1:
+                return pd.DataFrame()
             
-        elif pestana == "caja":
-            cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-            df = df.iloc[:, :len(cols_caja)]
-            df.columns = cols_caja
-            df['valor_n'] = df['valor'].apply(a_numero)
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df = df.dropna(subset=['fecha_dt'])
-            df['solo_dia'] = df['fecha_dt'].dt.date
+            columnas = datos_json[0]
+            filas = datos_json[1:]
+            
+            df = pd.DataFrame(filas, columns=columnas).astype(str)
+            df = df.replace('None', '').fillna('')
+            
+            if pestana == "ventas":
+                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
+                df = df.iloc[:, :len(cols)]
+                df.columns = cols
+                df['total_n'] = df['total'].apply(a_numero)
+                df['abono_n'] = df['abono'].apply(a_numero)
+                df['saldo_n'] = df['total_n'] - df['abono_n']
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df['solo_dia'] = df['fecha_dt'].dt.date
+                
+            elif pestana == "usuarios":
+                # Forzamos las 3 columnas básicas sin importar el nombre del encabezado
+                if df.shape[1] >= 3:
+                    df = df.iloc[:, :3]
+                    df.columns = ['nombre', 'clave', 'rol']
+                
+            elif pestana == "caja":
+                cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+                df = df.iloc[:, :len(cols_caja)]
+                df.columns = cols_caja
+                df['valor_n'] = df['valor'].apply(a_numero)
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['fecha_dt'])
+                df['solo_dia'] = df['fecha_dt'].dt.date
 
-        elif pestana == "gastos":
-            cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-            df = df.iloc[:, :len(cols_g)]
-            df.columns = cols_g
-            df['total_n'] = df['valor_total'].apply(a_numero)
-            df['abono_n'] = df['abono'].apply(a_numero)
-            df['saldo_n'] = df['saldo'].apply(a_numero)
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df['solo_dia'] = df['fecha_dt'].dt.date
-        
-        elif pestana == "horarios":
-            if not df.empty:
-                df = df.iloc[:, :4] 
-                df.columns = ['fecha', 'empleado', 'evento', 'hora']
-            else:
-                return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
+            elif pestana == "gastos":
+                cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
+                df = df.iloc[:, :len(cols_g)]
+                df.columns = cols_g
+                df['total_n'] = df['valor_total'].apply(a_numero)
+                df['abono_n'] = df['abono'].apply(a_numero)
+                df['saldo_n'] = df['saldo'].apply(a_numero)
+                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                df['solo_dia'] = df['fecha_dt'].dt.date
             
-        return df
+            elif pestana == "horarios":
+                if not df.empty:
+                    df = df.iloc[:, :4] 
+                    df.columns = ['fecha', 'empleado', 'evento', 'hora']
+                else:
+                    return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
+                
+            return df
+        return pd.DataFrame()
     except Exception as e: 
-        print(f"Error procesando pestaña {pestana}: {e}")
+        print(f"Error leyendo pestaña {pestana}: {e}")
         return pd.DataFrame()
 
 def enviar_google(payload):
@@ -236,6 +238,7 @@ def enviar_google(payload):
 # --- 3. LOGIN PROTEGIDO ---
 # --- 3. LOGIN CON LIMPIEZA DE CACHÉ ---
 # --- 3. LOGIN LECTURA DIRECTA ---
+# --- 3. LOGIN LECTURA DIRECTA ---
 if 'autenticado' not in st.session_state: 
     st.session_state['autenticado'] = False
 
@@ -244,20 +247,11 @@ df_users_db = leer_datos("usuarios")
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
-    # 1. Extraer todos los nombres directamente de la primera columna
     u_list = []
     if not df_users_db.empty:
-        # Toma la primera columna sin importar cómo se llame el encabezado
-        primer_columna = df_users_db.iloc[:, 0].dropna().astype(str).tolist()
-        
-        # Filtra encabezados genéricos y espacios en blanco
-        for u in primer_columna:
-            u_clean = u.strip()
-            if u_clean and u_clean.lower() not in ['nombre', 'usuario', 'user', 'none', '']:
-                if u_clean not in u_list:
-                    u_list.append(u_clean)
+        # Mapea todos los valores recibidos omitiendo filas vacías
+        u_list = [usr.strip() for usr in df_users_db['nombre'].tolist() if usr.strip()]
 
-    # Si por alguna razón la hoja está 100% vacía, deja Administrador
     if not u_list:
         u_list = ["Administrador"]
 
@@ -266,39 +260,23 @@ if not st.session_state['autenticado']:
         p_input = st.text_input("Contraseña", type="password")
         
         if st.form_submit_button("INGRESAR", use_container_width=True):
-            if df_users_db.empty:
-                if u_input == "Administrador" and p_input == "admin123":
-                    st.session_state.update({"autenticado": True, "usuario": "Administrador", "rol": "admin"})
+            user_data = df_users_db[df_users_db['nombre'].str.strip().str.lower() == str(u_input).strip().lower()]
+            
+            if not user_data.empty:
+                clave_real = str(user_data.iloc[0]['clave']).strip()
+                rol_real = str(user_data.iloc[0]['rol']).strip().lower()
+                
+                if str(p_input).strip() == clave_real:
+                    st.session_state.update({
+                        "autenticado": True, 
+                        "usuario": u_input, 
+                        "rol": rol_real
+                    })
                     st.rerun()
                 else:
                     st.error("❌ Contraseña incorrecta")
             else:
-                # Compara el usuario seleccionado con la primera columna
-                user_match = df_users_db[df_users_db.iloc[:, 0].astype(str).str.strip() == str(u_input).strip()]
-                
-                if not user_match.empty:
-                    # Toma la contraseña (columna 2 / índice 1)
-                    clave_real = str(user_match.iloc[0, 1]).strip()
-                    # Toma el rol (columna 3 / índice 2)
-                    rol_real = str(user_match.iloc[0, 2]).strip().lower() if user_match.shape[1] > 2 else "empleado"
-                    
-                    if str(p_input).strip() == clave_real:
-                        st.session_state.update({
-                            "autenticado": True, 
-                            "usuario": u_input, 
-                            "rol": rol_real
-                        })
-                        st.rerun()
-                    else:
-                        st.error("❌ Contraseña incorrecta")
-                else:
-                    st.error("❌ Usuario no encontrado")
-
-    if st.button("🔄 Limpiar Caché y Forzar Lectura", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
-    st.stop()
+                st.error("❌ Usuario no encontrado")
 
     st.stop()
 # --- 4. INTERFAZ ---
