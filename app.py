@@ -324,12 +324,12 @@ if opcion == "Ventas":
     
     # ... resto de tu código de lógica de ventas
     if st.session_state['rol'] == 'admin':
-    df_v = df_v_comp.copy()
-else:
-    if not df_v_comp.empty and 'empleado' in df_v_comp.columns:
-        df_v = df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']].copy()
-    else:
         df_v = df_v_comp.copy()
+    else:
+        if not df_v_comp.empty and 'empleado' in df_v_comp.columns:
+            df_v = df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']].copy()
+        else:
+            df_v = df_v_comp.copy()
     
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': 
