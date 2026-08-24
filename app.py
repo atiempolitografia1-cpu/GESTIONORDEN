@@ -4,7 +4,7 @@ from datetime import datetime, timedelta # Agregamos timedelta aquí
 import requests
 import io
 import re
-from fpdf import FPDF
+from fpdf import FPDF ¡?*
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Gestión Negocio Pro", layout="centered", initial_sidebar_state="expanded")
@@ -35,7 +35,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbwllOdzeAe5tziE6Iqxlfx-6b6XfANJ5AvRtQ-_nTjCg5ZZ06WtHT6osMr60LPthp077Q/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyHQpc5YylLiFGb2ZfcPXGOFmMPAgCgt2y2AalCJREcr49DHgNTRh59VOpxeI3oaw_bOg/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -147,101 +147,55 @@ def a_numero(valor):
 
 def leer_datos(pestana):
     try:
-        respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=15)
+        # Usamos microsegundos para evitar el caché de Google
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={pestana}&t={datetime.now().microsecond}"
+        res = requests.get(url, timeout=10)
+        df = pd.read_csv(io.StringIO(res.text), dtype=str).fillna('')
         
-        if respuesta.status_code == 200:
-            datos_json = respuesta.json()
+        if pestana == "ventas":
+            cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos']
+            df = df.iloc[:, :len(cols)]
+            df.columns = cols
+            df['total_n'] = df['total'].apply(a_numero)
+            df['abono_n'] = df['abono'].apply(a_numero)
+            df['saldo_n'] = df['total_n'] - df['abono_n']
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
             
-            if (isinstance(datos_json, dict) and "error" in datos_json) or len(datos_json) == 0:
-                datos_json = []
+        elif pestana == "usuarios":
+            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+            
+        elif pestana == "caja":
+            cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+            df = df.iloc[:, :len(cols_caja)]
+            df.columns = cols_caja
+            df['valor_n'] = df['valor'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df = df.dropna(subset=['fecha_dt'])
+            df['solo_dia'] = df['fecha_dt'].dt.date
 
-            # Si hay al menos encabezados
-            if len(datos_json) > 0:
-                columnas = datos_json[0]
-                filas = datos_json[1:] if len(datos_json) > 1 else []
-                df = pd.DataFrame(filas, columns=columnas).astype(str)
-                df = df.replace('None', '').fillna('')
+        # --- BLOQUE NUEVO: GASTOS ---
+        elif pestana == "gastos":
+            cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
+            df = df.iloc[:, :len(cols_g)]
+            df.columns = cols_g
+            df['total_n'] = df['valor_total'].apply(a_numero)
+            df['abono_n'] = df['abono'].apply(a_numero)
+            df['saldo_n'] = df['saldo'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
+        # ----------------------------
+        
+        elif pestana == "horarios":
+            if not df.empty:
+                df = df.iloc[:, :4] 
+                df.columns = ['fecha', 'empleado', 'evento', 'hora']
             else:
-                df = pd.DataFrame()
-
-            # --- ESTRUCTURACIÓN FIJA SEGÚN PESTAÑA ---
-            if pestana == "ventas":
-                cols_esperadas = [
-                    'fecha', 'n_orden', 'descripcion', 'total', 'abono', 
-                    'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 
-                    'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno'
-                ]
-                # Forzar que existan todas las columnas
-                for col in cols_esperadas:
-                    if col not in df.columns:
-                        df[col] = ""
-
-                # Conversiones numéricas y de fecha seguras
-                df['total_n'] = df['total'].apply(a_numero)
-                df['abono_n'] = df['abono'].apply(a_numero)
-                df['saldo_n'] = df['total_n'] - df['abono_n']
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df['solo_dia'] = df['fecha_dt'].dt.date
-                
-            elif pestana == "usuarios":
-                cols_u = ['nombre', 'clave', 'rol']
-                for col in cols_u:
-                    if col not in df.columns:
-                        df[col] = ""
-                if not df.empty and df.shape[1] >= 3:
-                    df = df.iloc[:, :3]
-                    df.columns = cols_u
-                
-            elif pestana == "caja":
-                cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-                for col in cols_caja:
-                    if col not in df.columns:
-                        df[col] = ""
-                df['valor_n'] = df['valor'].apply(a_numero)
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df['solo_dia'] = df['fecha_dt'].dt.date
-
-            elif pestana == "gastos":
-                cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-                for col in cols_g:
-                    if col not in df.columns:
-                        df[col] = ""
-                df['total_n'] = df['valor_total'].apply(a_numero)
-                df['abono_n'] = df['abono'].apply(a_numero)
-                df['saldo_n'] = df['saldo'].apply(a_numero)
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df['solo_dia'] = df['fecha_dt'].dt.date
+                return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
             
-            elif pestana == "horarios":
-                cols_h = ['fecha', 'empleado', 'evento', 'hora']
-                for col in cols_h:
-                    if col not in df.columns:
-                        df[col] = ""
-                
-            return df
-
-        # Si no responde status 200, retornamos estructura vacía para ventas
-        return crear_df_vacio(pestana)
-
-    except Exception as e: 
-        print(f"Error leyendo pestaña {pestana}: {e}")
-        return crear_df_vacio(pestana)
-
-def crear_df_vacio(pestana):
-    """Genera DataFrames vacíos con las columnas obligatorias para evitar KeyErrors"""
-    if pestana == "ventas":
-        cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 
-                'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 
-                'historial_pagos', 'diseno', 'total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
-    elif pestana == "usuarios":
-        cols = ['nombre', 'clave', 'rol']
-    elif pestana == "caja":
-        cols = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado', 'valor_n', 'fecha_dt', 'solo_dia']
-    elif pestana == "gastos":
-        cols = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio', 'total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
-    else:
-        cols = ['fecha', 'empleado', 'evento', 'hora']
-    return pd.DataFrame(columns=cols)
+        return df
+    except: 
+        return pd.DataFrame()
 
 def enviar_google(payload):
     try:
@@ -346,11 +300,10 @@ if opcion == "Ventas":
         c6.markdown(f'<div class="money-helper">{formato_pesos(tot)}</div>', unsafe_allow_html=True)
         c7.markdown(f'<div class="money-helper">{formato_pesos(abo)}</div>', unsafe_allow_html=True)
         desc = st.text_area("Descripción del Trabajo", key="d"+v)
-        c8, c9, c10, c11 = st.columns(4)
+        c8, c9, c10 = st.columns(3)
         est = c8.selectbox("Estado", ["EN PROCESO", "TERMINADO", "ENTREGADO"], key="e"+v)
         pag = c9.selectbox("Método de Pago", ["SIN ABONO", "EFECTIVO", "NEQUI", "BANCOLOMBIA", "DAVIPLATA"], key="p"+v)
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
-        diseno = c11.selectbox("Diseño", ["ninguno", "sencillo", "medio", "alta complejidad"], key="dis"+v) # Casilla nueva
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
             if abo > 0 and pag == "SIN ABONO":
@@ -367,7 +320,7 @@ if opcion == "Ventas":
                     "abono": float(abo), "saldo": float(tot - abo), "metodo_pago": str(pag),
                     "estado": str(est), "empleado": str(st.session_state['usuario']),
                     "cliente": str(cli), "nit": str(nit), "celular": str(cel),
-                    "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial, "diseno": str(diseno)
+                    "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial
                 }
                 p_caja = {
                     "accion": "insertar", "tipo_registro": "caja", "fecha": fecha_str,
