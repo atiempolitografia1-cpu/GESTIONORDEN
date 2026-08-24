@@ -165,11 +165,22 @@ def leer_datos(pestana):
             df = pd.DataFrame(filas, columns=columnas).astype(str)
             df = df.replace('None', '').fillna('')
             
-            # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS (Mantiene tu lógica intacta) ---
+            # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS ---
             if pestana == "ventas":
                 cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
-                df = df.iloc[:, :len(cols)]
-                df.columns = cols
+                
+                # Asignación segura de columnas por posición
+                if not df.empty:
+                    num_cols_reales = min(df.shape[1], len(cols))
+                    df = df.iloc[:, :num_cols_reales]
+                    df.columns = cols[:num_cols_reales]
+
+                # Rellenar columnas faltantes para evitar KeyErrors en Streamlit
+                for col in cols:
+                    if col not in df.columns:
+                        df[col] = ""
+
+                # Conversiones numéricas y de fecha seguras
                 df['total_n'] = df['total'].apply(a_numero)
                 df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['total_n'] - df['abono_n']
@@ -177,21 +188,38 @@ def leer_datos(pestana):
                 df['solo_dia'] = df['fecha_dt'].dt.date
                 
             elif pestana == "usuarios":
-                df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+                if df.shape[1] >= 3:
+                    df = df.iloc[:, :3]
+                    df.columns = ['nombre', 'clave', 'rol']
+                elif df.shape[1] == 2:
+                    df = df.iloc[:, :2]
+                    df.columns = ['nombre', 'clave']
+                    df['rol'] = 'empleado'
                 
             elif pestana == "caja":
                 cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-                df = df.iloc[:, :len(cols_caja)]
-                df.columns = cols_caja
+                if not df.empty:
+                    num_cols = min(df.shape[1], len(cols_caja))
+                    df = df.iloc[:, :num_cols]
+                    df.columns = cols_caja[:num_cols]
+                for col in cols_caja:
+                    if col not in df.columns:
+                        df[col] = ""
+
                 df['valor_n'] = df['valor'].apply(a_numero)
                 df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df = df.dropna(subset=['fecha_dt'])
                 df['solo_dia'] = df['fecha_dt'].dt.date
 
             elif pestana == "gastos":
                 cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-                df = df.iloc[:, :len(cols_g)]
-                df.columns = cols_g
+                if not df.empty:
+                    num_cols = min(df.shape[1], len(cols_g))
+                    df = df.iloc[:, :num_cols]
+                    df.columns = cols_g[:num_cols]
+                for col in cols_g:
+                    if col not in df.columns:
+                        df[col] = ""
+
                 df['total_n'] = df['valor_total'].apply(a_numero)
                 df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['saldo'].apply(a_numero)
@@ -210,6 +238,7 @@ def leer_datos(pestana):
     except Exception as e: 
         print(f"Error leyendo pestaña {pestana}: {e}")
         return pd.DataFrame()
+
 
 def enviar_google(payload):
     try:
