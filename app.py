@@ -153,29 +153,30 @@ def leer_datos(pestana):
             datos_json = respuesta.json()
             
             if (isinstance(datos_json, dict) and "error" in datos_json) or len(datos_json) == 0:
-                return pd.DataFrame()
-            
-            columnas = datos_json[0]
-            filas = datos_json[1:]
-            
-            # Si hay datos, creamos el DataFrame usando la primera fila (los encabezados reales de Sheets)
-            df = pd.DataFrame(filas, columns=columnas).astype(str)
-            df = df.replace('None', '').fillna('')
-            
+                datos_json = []
+
+            # Si hay al menos encabezados
+            if len(datos_json) > 0:
+                columnas = datos_json[0]
+                filas = datos_json[1:] if len(datos_json) > 1 else []
+                df = pd.DataFrame(filas, columns=columnas).astype(str)
+                df = df.replace('None', '').fillna('')
+            else:
+                df = pd.DataFrame()
+
+            # --- ESTRUCTURACIÓN FIJA SEGÚN PESTAÑA ---
             if pestana == "ventas":
-                # ORDEN EXACTO SEGÚN TU CAPTURA DE PANTALLA:
                 cols_esperadas = [
                     'fecha', 'n_orden', 'descripcion', 'total', 'abono', 
                     'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 
                     'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno'
                 ]
-                
-                # Forzar que todas las columnas existan aunque la hoja esté casi vacía
+                # Forzar que existan todas las columnas
                 for col in cols_esperadas:
                     if col not in df.columns:
                         df[col] = ""
 
-                # Conversiones numéricas y fechas sobre las columnas correctas
+                # Conversiones numéricas y de fecha seguras
                 df['total_n'] = df['total'].apply(a_numero)
                 df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['total_n'] - df['abono_n']
@@ -183,9 +184,13 @@ def leer_datos(pestana):
                 df['solo_dia'] = df['fecha_dt'].dt.date
                 
             elif pestana == "usuarios":
-                if df.shape[1] >= 3:
+                cols_u = ['nombre', 'clave', 'rol']
+                for col in cols_u:
+                    if col not in df.columns:
+                        df[col] = ""
+                if not df.empty and df.shape[1] >= 3:
                     df = df.iloc[:, :3]
-                    df.columns = ['nombre', 'clave', 'rol']
+                    df.columns = cols_u
                 
             elif pestana == "caja":
                 cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
@@ -208,18 +213,35 @@ def leer_datos(pestana):
                 df['solo_dia'] = df['fecha_dt'].dt.date
             
             elif pestana == "horarios":
-                if not df.empty:
-                    df = df.iloc[:, :4] 
-                    df.columns = ['fecha', 'empleado', 'evento', 'hora']
-                else:
-                    return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
+                cols_h = ['fecha', 'empleado', 'evento', 'hora']
+                for col in cols_h:
+                    if col not in df.columns:
+                        df[col] = ""
                 
             return df
-        return pd.DataFrame()
+
+        # Si no responde status 200, retornamos estructura vacía para ventas
+        return crear_df_vacio(pestana)
+
     except Exception as e: 
         print(f"Error leyendo pestaña {pestana}: {e}")
-        return pd.DataFrame()
+        return crear_df_vacio(pestana)
 
+def crear_df_vacio(pestana):
+    """Genera DataFrames vacíos con las columnas obligatorias para evitar KeyErrors"""
+    if pestana == "ventas":
+        cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 
+                'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 
+                'historial_pagos', 'diseno', 'total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
+    elif pestana == "usuarios":
+        cols = ['nombre', 'clave', 'rol']
+    elif pestana == "caja":
+        cols = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado', 'valor_n', 'fecha_dt', 'solo_dia']
+    elif pestana == "gastos":
+        cols = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio', 'total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
+    else:
+        cols = ['fecha', 'empleado', 'evento', 'hora']
+    return pd.DataFrame(columns=cols)
 
 def enviar_google(payload):
     try:
