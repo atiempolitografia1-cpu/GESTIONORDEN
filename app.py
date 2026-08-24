@@ -240,25 +240,32 @@ def enviar_google(payload):
     return False
 
 # --- 3. LOGIN ---
-# --- 3. LOGIN LECTURA DIRECTA ---
+# --- 3. LOGIN CON CARGA FORZADA DE USUARIOS ---
 if 'autenticado' not in st.session_state: 
     st.session_state['autenticado'] = False
 
+# 1. Leemos los usuarios
 df_users_db = leer_datos("usuarios")
+
+# 2. Si viene vacío o solo trae encabezados, intentamos una re-lectura sin caché
+if df_users_db.empty or len(df_users_db) <= 1:
+    st.cache_data.clear()
+    df_users_db = leer_datos("usuarios")
 
 if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
     u_list = []
-    if not df_users_db.empty and 'nombre' in df_users_db.columns:
-        # Extrae todos los nombres de la columna 'nombre', eliminando vacíos y duplicados
-        nombres_raw = df_users_db['nombre'].dropna().tolist()
-        for u in nombres_raw:
-            val_limpio = str(u).strip()
-            # Descarta si es el nombre de la cabecera
-            if val_limpio and val_limpio.lower() not in ['nombre', 'usuario', 'user'] and val_limpio not in u_list:
-                u_list.append(val_limpio)
+    if not df_users_db.empty:
+        # Obtenemos la primera columna sin importar cómo se llame (Columna A)
+        col_nombres = df_users_db.iloc[:, 0].dropna().astype(str).tolist()
+        for u in col_nombres:
+            u_limpio = u.strip()
+            # Omitimos celdas vacías o la palabra 'nombre'/'usuario' de la cabecera
+            if u_limpio and u_limpio.lower() not in ['nombre', 'usuario', 'user', 'none'] and u_limpio not in u_list:
+                u_list.append(u_limpio)
 
+    # Si por algún fallo extremo sigue vacío, dejamos solo Administrador
     if not u_list:
         u_list = ["Administrador"]
 
@@ -267,12 +274,13 @@ if not st.session_state['autenticado']:
         p_input = st.text_input("Contraseña", type="password")
         
         if st.form_submit_button("INGRESAR", use_container_width=True):
-            # Búsqueda insensible a mayúsculas/minúsculas
-            user_data = df_users_db[df_users_db['nombre'].astype(str).str.strip().str.lower() == str(u_input).strip().lower()]
+            # Buscamos al usuario seleccionado comparando la Columna A
+            user_data = df_users_db[df_users_db.iloc[:, 0].astype(str).str.strip().str.lower() == str(u_input).strip().lower()]
             
             if not user_data.empty:
-                clave_real = str(user_data.iloc[0]['clave']).strip()
-                rol_real = str(user_data.iloc[0]['rol']).strip().lower() if 'rol' in user_data.columns else "empleado"
+                # Columna B es clave (índice 1), Columna C es rol (índice 2)
+                clave_real = str(user_data.iloc[0, 1]).strip()
+                rol_real = str(user_data.iloc[0, 2]).strip().lower() if user_data.shape[1] > 2 else "empleado"
                 
                 if str(p_input).strip() == clave_real:
                     st.session_state.update({
@@ -287,6 +295,7 @@ if not st.session_state['autenticado']:
                 st.error("❌ Usuario no encontrado")
 
     st.stop()
+    
 # --- 4. INTERFAZ ---
 with st.sidebar:
     # 1. Colocamos el logo al principio de la barra lateral
