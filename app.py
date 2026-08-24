@@ -173,6 +173,8 @@ def leer_datos(pestana):
             filas = datos_json[1:]
             
             df = pd.DataFrame(filas, columns=columnas).astype(str)
+            # Limpiamos espacios en blanco accidentales en todos los textos
+            df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
             df = df.replace('None', '').fillna('')
             
             if pestana == "ventas":
@@ -186,10 +188,14 @@ def leer_datos(pestana):
                 df['solo_dia'] = df['fecha_dt'].dt.date
                 
             elif pestana == "usuarios":
-                # Forzamos las 3 columnas básicas sin importar el nombre del encabezado
+                # FORZADO POR POSICIÓN: Toma la Columna 0 (nombre), Columna 1 (clave) y Columna 2 (rol)
                 if df.shape[1] >= 3:
                     df = df.iloc[:, :3]
                     df.columns = ['nombre', 'clave', 'rol']
+                elif df.shape[1] == 2:
+                    df = df.iloc[:, :2]
+                    df.columns = ['nombre', 'clave']
+                    df['rol'] = 'empleado'
                 
             elif pestana == "caja":
                 cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
@@ -222,7 +228,6 @@ def leer_datos(pestana):
     except Exception as e: 
         print(f"Error leyendo pestaña {pestana}: {e}")
         return pd.DataFrame()
-
 def enviar_google(payload):
     """Envía cambios a Google e inValida la caché para refrescar al instante."""
     try:
@@ -235,9 +240,6 @@ def enviar_google(payload):
     return False
 
 # --- 3. LOGIN ---
-# --- 3. LOGIN PROTEGIDO ---
-# --- 3. LOGIN CON LIMPIEZA DE CACHÉ ---
-# --- 3. LOGIN LECTURA DIRECTA ---
 # --- 3. LOGIN LECTURA DIRECTA ---
 if 'autenticado' not in st.session_state: 
     st.session_state['autenticado'] = False
@@ -248,9 +250,14 @@ if not st.session_state['autenticado']:
     st.title("🔐 Acceso al Sistema")
     
     u_list = []
-    if not df_users_db.empty:
-        # Mapea todos los valores recibidos omitiendo filas vacías
-        u_list = [usr.strip() for usr in df_users_db['nombre'].tolist() if usr.strip()]
+    if not df_users_db.empty and 'nombre' in df_users_db.columns:
+        # Extrae todos los nombres de la columna 'nombre', eliminando vacíos y duplicados
+        nombres_raw = df_users_db['nombre'].dropna().tolist()
+        for u in nombres_raw:
+            val_limpio = str(u).strip()
+            # Descarta si es el nombre de la cabecera
+            if val_limpio and val_limpio.lower() not in ['nombre', 'usuario', 'user'] and val_limpio not in u_list:
+                u_list.append(val_limpio)
 
     if not u_list:
         u_list = ["Administrador"]
@@ -260,11 +267,12 @@ if not st.session_state['autenticado']:
         p_input = st.text_input("Contraseña", type="password")
         
         if st.form_submit_button("INGRESAR", use_container_width=True):
-            user_data = df_users_db[df_users_db['nombre'].str.strip().str.lower() == str(u_input).strip().lower()]
+            # Búsqueda insensible a mayúsculas/minúsculas
+            user_data = df_users_db[df_users_db['nombre'].astype(str).str.strip().str.lower() == str(u_input).strip().lower()]
             
             if not user_data.empty:
                 clave_real = str(user_data.iloc[0]['clave']).strip()
-                rol_real = str(user_data.iloc[0]['rol']).strip().lower()
+                rol_real = str(user_data.iloc[0]['rol']).strip().lower() if 'rol' in user_data.columns else "empleado"
                 
                 if str(p_input).strip() == clave_real:
                     st.session_state.update({
