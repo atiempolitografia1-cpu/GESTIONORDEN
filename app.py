@@ -177,24 +177,24 @@ def leer_datos(pestana):
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
             df = df.replace('None', '').fillna('')
             
-            elif pestana == "ventas":
-            cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
-    
-            if not df.empty and df.shape[1] >= len(cols):
-            df = df.iloc[:, :len(cols)]
-            df.columns = cols
-            df['total_n'] = df['total'].apply(a_numero)
-            df['abono_n'] = df['abono'].apply(a_numero)
-            df['saldo_n'] = df['total_n'] - df['abono_n']
-            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-            df['solo_dia'] = df['fecha_dt'].dt.date
-            else:
-        # Devuelve un DataFrame vacío con las columnas garantizadas
-              columnas_totales = cols + ['total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
-              return pd.DataFrame(columns=columnas_totales)
+            # --- EVALUACIÓN DE PESTAÑAS (CORREGIDO DE IF A ELIF) ---
+            if pestana == "ventas":
+                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
+                
+                if not df.empty and df.shape[1] >= len(cols):
+                    df = df.iloc[:, :len(cols)]
+                    df.columns = cols
+                    df['total_n'] = df['total'].apply(a_numero)
+                    df['abono_n'] = df['abono'].apply(a_numero)
+                    df['saldo_n'] = df['total_n'] - df['abono_n']
+                    df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+                    df['solo_dia'] = df['fecha_dt'].dt.date
+                else:
+                    columnas_totales = cols + ['total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
+                    return pd.DataFrame(columns=columnas_totales)
                 
             elif pestana == "usuarios":
-                # FORZADO POR POSICIÓN: Toma la Columna 0 (nombre), Columna 1 (clave) y Columna 2 (rol)
+                # FORZADO POR POSICIÓN: Toma Columna 0 (nombre), Columna 1 (clave) y Columna 2 (rol)
                 if df.shape[1] >= 3:
                     df = df.iloc[:, :3]
                     df.columns = ['nombre', 'clave', 'rol']
