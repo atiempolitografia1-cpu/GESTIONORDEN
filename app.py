@@ -145,77 +145,88 @@ def a_numero(valor):
         return float(s) if s else 0.0
     except: return 0.0
 
-def leer_datos(pestana):
-    try:
-        # Hacemos una consulta segura a tu Apps Script pidiendo la pestaña correspondiente
-        respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=15)
-        
-        if respuesta.status_code == 200:
-            datos_json = respuesta.json()
-            
-            # Si hay un error interno o la lista está vacía, devolvemos una tabla en blanco
-            if (isinstance(datos_json, dict) and "error" in datos_json) or len(datos_json) == 0:
-                return pd.DataFrame()
-            
-            # El Apps Script nos devuelve una matriz. La fila 0 son los títulos (columnas)
-            columnas = datos_json[0]
-            filas = datos_json[1:]
-            
-            # Convertimos la matriz en una tabla de Pandas (DataFrame) con textos limpios
-            df = pd.DataFrame(filas, columns=columnas).astype(str)
-            df = df.replace('None', '').fillna('')
-            
-            # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS (Mantiene tu lógica intacta) ---
-            if pestana == "ventas":
-                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
-                df = df.iloc[:, :len(cols)]
-                df.columns = cols
-                df['total_n'] = df['total'].apply(a_numero)
-                df['abono_n'] = df['abono'].apply(a_numero)
-                df['saldo_n'] = df['total_n'] - df['abono_n']
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df['solo_dia'] = df['fecha_dt'].dt.date
-                
-            elif pestana == "usuarios":
-                df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
-                
-            elif pestana == "caja":
-                cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-                df = df.iloc[:, :len(cols_caja)]
-                df.columns = cols_caja
-                df['valor_n'] = df['valor'].apply(a_numero)
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df = df.dropna(subset=['fecha_dt'])
-                df['solo_dia'] = df['fecha_dt'].dt.date
+# --- 2. FUNCIONES OPTIMIZADAS CON CACHÉ (Tiempos de respuesta ultra rápidos) ---
 
-            elif pestana == "gastos":
-                cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-                df = df.iloc[:, :len(cols_g)]
-                df.columns = cols_g
-                df['total_n'] = df['valor_total'].apply(a_numero)
-                df['abono_n'] = df['abono'].apply(a_numero)
-                df['saldo_n'] = df['saldo'].apply(a_numero)
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df['solo_dia'] = df['fecha_dt'].dt.date
+@st.cache_data(ttl=10, show_spinner=False)
+def descargar_todas_las_tablas():
+    """Descarga toda la base de datos de Google en 1 sola consulta HTTP."""
+    try:
+        respuesta = requests.get(URL_SCRIPT, params={"tabla": "todas"}, timeout=10)
+        if respuesta.status_code == 200:
+            return respuesta.json()
+    except Exception as e:
+        print(f"Error descargando base de datos: {e}")
+    return {}
+
+def leer_datos(pestana):
+    """Procesa los datos desde la caché local sin sobrecargar la red."""
+    try:
+        base_datos = descargar_todas_las_tablas()
+        datos_json = base_datos.get(pestana, [])
+        
+        if not datos_json or len(datos_json) <= 1:
+            return pd.DataFrame()
+        
+        columnas = datos_json[0]
+        filas = datos_json[1:]
+        
+        df = pd.DataFrame(filas, columns=columnas).astype(str)
+        df = df.replace('None', '').fillna('')
+        
+        if pestana == "ventas":
+            cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
+            df = df.iloc[:, :len(cols)]
+            df.columns = cols
+            df['total_n'] = df['total'].apply(a_numero)
+            df['abono_n'] = df['abono'].apply(a_numero)
+            df['saldo_n'] = df['total_n'] - df['abono_n']
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
             
-            elif pestana == "horarios":
-                if not df.empty:
-                    df = df.iloc[:, :4] 
-                    df.columns = ['fecha', 'empleado', 'evento', 'hora']
-                else:
-                    return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
-                
-            return df
-        return pd.DataFrame()
+        elif pestana == "usuarios":
+            df.columns = ['nombre', 'clave', 'rol'] + list(df.columns[3:])
+            
+        elif pestana == "caja":
+            cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
+            df = df.iloc[:, :len(cols_caja)]
+            df.columns = cols_caja
+            df['valor_n'] = df['valor'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df = df.dropna(subset=['fecha_dt'])
+            df['solo_dia'] = df['fecha_dt'].dt.date
+
+        elif pestana == "gastos":
+            cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
+            df = df.iloc[:, :len(cols_g)]
+            df.columns = cols_g
+            df['total_n'] = df['valor_total'].apply(a_numero)
+            df['abono_n'] = df['abono'].apply(a_numero)
+            df['saldo_n'] = df['saldo'].apply(a_numero)
+            df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+            df['solo_dia'] = df['fecha_dt'].dt.date
+        
+        elif pestana == "horarios":
+            if not df.empty:
+                df = df.iloc[:, :4] 
+                df.columns = ['fecha', 'empleado', 'evento', 'hora']
+            else:
+                return pd.DataFrame(columns=['fecha', 'empleado', 'evento', 'hora'])
+            
+        return df
     except Exception as e: 
-        print(f"Error leyendo pestaña {pestana}: {e}")
+        print(f"Error procesando pestaña {pestana}: {e}")
         return pd.DataFrame()
 
 def enviar_google(payload):
+    """Envía cambios a Google e inValida la caché para refrescar al instante."""
     try:
-        res = requests.post(URL_SCRIPT, json=payload, timeout=15)
-        return res.status_code == 200
-    except: return False
+        res = requests.post(URL_SCRIPT, json=payload, timeout=12)
+        if res.status_code == 200:
+            st.cache_data.clear()  # <-- Limpia la memoria caché para forzar la actualización de datos
+            return True
+    except: 
+        pass
+    return False
 
 # --- 3. LOGIN ---
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
