@@ -147,40 +147,35 @@ def a_numero(valor):
 
 def leer_datos(pestana):
     try:
-        # Hacemos una consulta segura a tu Apps Script pidiendo la pestaña correspondiente
         respuesta = requests.get(URL_SCRIPT, params={"tabla": pestana}, timeout=15)
         
         if respuesta.status_code == 200:
             datos_json = respuesta.json()
             
-            # Si hay un error interno o la lista está vacía, devolvemos una tabla en blanco
             if (isinstance(datos_json, dict) and "error" in datos_json) or len(datos_json) == 0:
                 return pd.DataFrame()
             
-            # El Apps Script nos devuelve una matriz. La fila 0 son los títulos (columnas)
             columnas = datos_json[0]
             filas = datos_json[1:]
             
-            # Convertimos la matriz en una tabla de Pandas (DataFrame) con textos limpios
+            # Si hay datos, creamos el DataFrame usando la primera fila (los encabezados reales de Sheets)
             df = pd.DataFrame(filas, columns=columnas).astype(str)
             df = df.replace('None', '').fillna('')
             
-            # --- PROCESAMIENTO INTERNO DE LAS PESTAÑAS ---
             if pestana == "ventas":
-                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
+                # ORDEN EXACTO SEGÚN TU CAPTURA DE PANTALLA:
+                cols_esperadas = [
+                    'fecha', 'n_orden', 'descripcion', 'total', 'abono', 
+                    'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 
+                    'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno'
+                ]
                 
-                # Asignación segura de columnas por posición
-                if not df.empty:
-                    num_cols_reales = min(df.shape[1], len(cols))
-                    df = df.iloc[:, :num_cols_reales]
-                    df.columns = cols[:num_cols_reales]
-
-                # Rellenar columnas faltantes para evitar KeyErrors en Streamlit
-                for col in cols:
+                # Forzar que todas las columnas existan aunque la hoja esté casi vacía
+                for col in cols_esperadas:
                     if col not in df.columns:
                         df[col] = ""
 
-                # Conversiones numéricas y de fecha seguras
+                # Conversiones numéricas y fechas sobre las columnas correctas
                 df['total_n'] = df['total'].apply(a_numero)
                 df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['total_n'] - df['abono_n']
@@ -191,35 +186,21 @@ def leer_datos(pestana):
                 if df.shape[1] >= 3:
                     df = df.iloc[:, :3]
                     df.columns = ['nombre', 'clave', 'rol']
-                elif df.shape[1] == 2:
-                    df = df.iloc[:, :2]
-                    df.columns = ['nombre', 'clave']
-                    df['rol'] = 'empleado'
                 
             elif pestana == "caja":
                 cols_caja = ['fecha', 'n_orden', 'valor', 'metodo', 'empleado']
-                if not df.empty:
-                    num_cols = min(df.shape[1], len(cols_caja))
-                    df = df.iloc[:, :num_cols]
-                    df.columns = cols_caja[:num_cols]
                 for col in cols_caja:
                     if col not in df.columns:
                         df[col] = ""
-
                 df['valor_n'] = df['valor'].apply(a_numero)
                 df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
                 df['solo_dia'] = df['fecha_dt'].dt.date
 
             elif pestana == "gastos":
                 cols_g = ['id_gasto', 'fecha', 'empresa', 'valor_total', 'abono', 'saldo', 'tipo', 'factura_e', 'descripcion', 'medio']
-                if not df.empty:
-                    num_cols = min(df.shape[1], len(cols_g))
-                    df = df.iloc[:, :num_cols]
-                    df.columns = cols_g[:num_cols]
                 for col in cols_g:
                     if col not in df.columns:
                         df[col] = ""
-
                 df['total_n'] = df['valor_total'].apply(a_numero)
                 df['abono_n'] = df['abono'].apply(a_numero)
                 df['saldo_n'] = df['saldo'].apply(a_numero)
