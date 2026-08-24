@@ -177,15 +177,21 @@ def leer_datos(pestana):
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
             df = df.replace('None', '').fillna('')
             
-            if pestana == "ventas":
-                cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
-                df = df.iloc[:, :len(cols)]
-                df.columns = cols
-                df['total_n'] = df['total'].apply(a_numero)
-                df['abono_n'] = df['abono'].apply(a_numero)
-                df['saldo_n'] = df['total_n'] - df['abono_n']
-                df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-                df['solo_dia'] = df['fecha_dt'].dt.date
+            elif pestana == "ventas":
+    cols = ['fecha', 'n_orden', 'descripcion', 'total', 'abono', 'saldo', 'metodo_pago', 'estado', 'empleado', 'cliente', 'nit', 'celular', 'correo', 'factura', 'historial_pagos', 'diseno']
+    
+    if not df.empty and df.shape[1] >= len(cols):
+        df = df.iloc[:, :len(cols)]
+        df.columns = cols
+        df['total_n'] = df['total'].apply(a_numero)
+        df['abono_n'] = df['abono'].apply(a_numero)
+        df['saldo_n'] = df['total_n'] - df['abono_n']
+        df['fecha_dt'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
+        df['solo_dia'] = df['fecha_dt'].dt.date
+    else:
+        # Devuelve un DataFrame vacío con las columnas garantizadas
+        columnas_totales = cols + ['total_n', 'abono_n', 'saldo_n', 'fecha_dt', 'solo_dia']
+        return pd.DataFrame(columns=columnas_totales)
                 
             elif pestana == "usuarios":
                 # FORZADO POR POSICIÓN: Toma la Columna 0 (nombre), Columna 1 (clave) y Columna 2 (rol)
@@ -318,9 +324,12 @@ if opcion == "Ventas":
     
     # ... resto de tu código de lógica de ventas
     if st.session_state['rol'] == 'admin':
-        df_v = df_v_comp.copy()
-    else:
+    df_v = df_v_comp.copy()
+else:
+    if not df_v_comp.empty and 'empleado' in df_v_comp.columns:
         df_v = df_v_comp[df_v_comp['empleado'] == st.session_state['usuario']].copy()
+    else:
+        df_v = df_v_comp.copy()
     
     t_labels = ["📝 Registrar", "✏️ Editar / Abonar"]
     if st.session_state['rol'] == 'admin': 
