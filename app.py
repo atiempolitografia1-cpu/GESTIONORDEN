@@ -306,42 +306,42 @@ if opcion == "Ventas":
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
-           if abo > 0 and pag == "SIN ABONO":
-               st.error("🚫 ¡Atención! Si hay un abono, debes elegir el medio de pago.")
-           elif not ord or not cli:
-               st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
-           else:
-               fecha_str = fecha_manual.strftime("%d/%m/%Y")
-               historial_inicial = f"{formato_pesos(abo)} ({pag}) {fecha_str}"
-        
-               # Estructura unificada que envía las ventas y la caja juntas en un solo request
-               p_venta = {
-                   "accion": "insertar", 
-                   "tipo_registro": "ventas", 
-                   "fecha": fecha_str,
-                   "n_orden": str(ord), 
-                   "descripcion": str(desc), 
-                   "total": float(tot),
-                   "abono": float(abo), 
-                   "saldo": float(tot - abo), 
-                   "metodo_pago": str(pag),
-                   "estado": str(est), 
-                   "empleado": str(st.session_state['usuario']),
-                   "cliente": str(cli), 
-                   "nit": str(nit), 
-                   "celular": str(cel),
-                   "correo": str(cor), 
-                   "factura": str(fac), 
-                   "historial_pagos": historial_inicial,
-                   "datos_caja": {
-                       "fecha": fecha_str,
-                       "n_orden": str(ord),
-                       "valor": float(abo),
-                       "metodo": str(pag),
-                       "empleado": str(st.session_state['usuario'])
-                   } if abo > 0 else None
+            if abo > 0 and pag == "SIN ABONO":
+                st.error("🚫 ¡Atención! Si hay un abono, debes elegir el medio de pago.")
+            elif not ord or not cli:
+                st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
+            else:
+                fecha_str = fecha_manual.strftime("%d/%m/%Y")
+                historial_inicial = f"{formato_pesos(abo)} ({pag}) {fecha_str}"
+                
+                # Estructura unificada que envía las ventas y la caja juntas en un solo request
+                p_venta = {
+                    "accion": "insertar", 
+                    "tipo_registro": "ventas", 
+                    "fecha": fecha_str,
+                    "n_orden": str(ord), 
+                    "descripcion": str(desc), 
+                    "total": float(tot),
+                    "abono": float(abo), 
+                    "saldo": float(tot - abo), 
+                    "metodo_pago": str(pag),
+                    "estado": str(est), 
+                    "empleado": str(st.session_state['usuario']),
+                    "cliente": str(cli), 
+                    "nit": str(nit), 
+                    "celular": str(cel),
+                    "correo": str(cor), 
+                    "factura": str(fac), 
+                    "historial_pagos": historial_inicial,
+                    "datos_caja": {
+                        "fecha": fecha_str,
+                        "n_orden": str(ord),
+                        "valor": float(abo),
+                        "metodo": str(pag),
+                        "empleado": str(st.session_state['usuario'])
+                    } if abo > 0 else None
                 }
-        
+                
                 if enviar_google(p_venta):
                     st.session_state['pdf_registro'] = {
                         "n_orden": str(ord),
