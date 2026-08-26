@@ -35,7 +35,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 SHEET_ID = "1UGxbXTQhXKJ-JmKxpzglccDJrZgpCsTDflKO9N8RMTc"
-URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyHQpc5YylLiFGb2ZfcPXGOFmMPAgCgt2y2AalCJREcr49DHgNTRh59VOpxeI3oaw_bOg/exec"
+URL_SCRIPT = "https://script.google.com/macros/s/AKfycby9QPuzJMxPxNtgAY4bgdGhNoAhsSH9SYWoIx_WV-VDwiSj8SwgQ0LDBwPrMroDMZJ2_A/exec"
 
 # --- 2. FUNCIONES DE FORMATO Y DATOS ---
 def formato_pesos(valor):
@@ -306,31 +306,43 @@ if opcion == "Ventas":
         fac = c10.selectbox("¿Requiere Factura?", ["NO", "SI"], key="f"+v)
 
         if st.button("💾 GUARDAR VENTA", use_container_width=True):
-            if abo > 0 and pag == "SIN ABONO":
-                st.error("🚫 ¡Atención! Si hay un abono, debes elegir el medio de pago.")
-            elif not ord or not cli:
-                st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
-            else:
-                fecha_str = fecha_manual.strftime("%d/%m/%Y")
-                historial_inicial = f"{formato_pesos(abo)} ({pag}) {fecha_str}"
-                
-                p_venta = {
-                    "accion": "insertar", "tipo_registro": "ventas", "fecha": fecha_str,
-                    "n_orden": str(ord), "descripcion": str(desc), "total": float(tot),
-                    "abono": float(abo), "saldo": float(tot - abo), "metodo_pago": str(pag),
-                    "estado": str(est), "empleado": str(st.session_state['usuario']),
-                    "cliente": str(cli), "nit": str(nit), "celular": str(cel),
-                    "correo": str(cor), "factura": str(fac), "historial_pagos": historial_inicial
+           if abo > 0 and pag == "SIN ABONO":
+               st.error("🚫 ¡Atención! Si hay un abono, debes elegir el medio de pago.")
+           elif not ord or not cli:
+               st.error("⚠️ El N° de Orden y el Cliente son obligatorios.")
+           else:
+               fecha_str = fecha_manual.strftime("%d/%m/%Y")
+               historial_inicial = f"{formato_pesos(abo)} ({pag}) {fecha_str}"
+        
+               # Estructura unificada que envía las ventas y la caja juntas en un solo request
+               p_venta = {
+                   "accion": "insertar", 
+                   "tipo_registro": "ventas", 
+                   "fecha": fecha_str,
+                   "n_orden": str(ord), 
+                   "descripcion": str(desc), 
+                   "total": float(tot),
+                   "abono": float(abo), 
+                   "saldo": float(tot - abo), 
+                   "metodo_pago": str(pag),
+                   "estado": str(est), 
+                   "empleado": str(st.session_state['usuario']),
+                   "cliente": str(cli), 
+                   "nit": str(nit), 
+                   "celular": str(cel),
+                   "correo": str(cor), 
+                   "factura": str(fac), 
+                   "historial_pagos": historial_inicial,
+                   "datos_caja": {
+                       "fecha": fecha_str,
+                       "n_orden": str(ord),
+                       "valor": float(abo),
+                       "metodo": str(pag),
+                       "empleado": str(st.session_state['usuario'])
+                   } if abo > 0 else None
                 }
-                p_caja = {
-                    "accion": "insertar", "tipo_registro": "caja", "fecha": fecha_str,
-                    "n_orden": str(ord), "valor": float(abo), "metodo": str(pag),
-                    "empleado": str(st.session_state['usuario'])
-                }
-                
+        
                 if enviar_google(p_venta):
-                    if abo > 0: enviar_google(p_caja)
-                    
                     st.session_state['pdf_registro'] = {
                         "n_orden": str(ord),
                         "cliente": str(cli),
@@ -343,11 +355,13 @@ if opcion == "Ventas":
                         "descripcion": desc,
                         "historial_pagos": historial_inicial
                     }
-                    
-                    st.success(f"✅ Orden {ord} registrada")
+                    st.success(f"✅ Orden {ord} registrada con éxito.")
                     st.session_state['limp'] = st.session_state.get('limp', 0) + 1
                     st.rerun()
+                else:
+                    st.error("❌ Ocurrió un error al guardar. Reintente.")
 
+        
         if 'pdf_registro' in st.session_state:
             # ... (tu código del botón de descarga sigue igual)
             dat = st.session_state['pdf_registro']
@@ -407,29 +421,38 @@ if opcion == "Ventas":
                     
                     submit = st.form_submit_button("💾 ACTUALIZAR ORDEN", use_container_width=True)
 
+                    # Reemplaza el bloque 'if submit:' dentro del formulario de la pestaña 1:
                     if submit:
                         h_pago = val['historial_pagos']
                         f_abono_str = fecha_abono_manual.strftime('%d/%m/%Y')
                         if e_nab > 0:
                             h_pago += f" | +{formato_pesos(e_nab)} ({e_met}) {f_abono_str}"
-                        
+    
                         payload = {
-                            "accion": "actualizar", "tipo_registro": "ventas", "id_busqueda": sel,
-                            "cliente": e_cli, "nit": e_nit, "celular": e_cel, "correo": e_cor, "factura": e_fac,
-                            "descripcion": e_desc, "total": float(e_tot), "abono": float(nuevo_abono_total),
-                            "saldo": float(nuevo_saldo), "estado": e_est, "historial_pagos": h_pago
+                            "accion": "actualizar", 
+                            "tipo_registro": "ventas", 
+                            "id_busqueda": sel,
+                            "cliente": e_cli, 
+                            "nit": e_nit, 
+                            "celular": e_cel, 
+                            "correo": e_cor, 
+                            "factura": e_fac,
+                            "descripcion": e_desc, 
+                            "total": float(e_tot), 
+                            "abono": float(nuevo_abono_total),
+                            "saldo": float(nuevo_saldo), 
+                            "estado": e_est, 
+                            "historial_pagos": h_pago,
+                            "datos_caja": {
+                                "fecha": f_abono_str,
+                                "n_orden": str(sel),
+                                "valor": float(e_nab),
+                                "metodo": str(e_met),
+                                "empleado": str(st.session_state['usuario'])
+                            } if e_nab > 0 else None
                         }
-                        
+    
                         if enviar_google(payload):
-                            if e_nab > 0:
-                                p_caja_nuevo = {
-                                    "accion": "insertar", "tipo_registro": "caja", "fecha": f_abono_str,
-                                    "n_orden": str(sel), "valor": float(e_nab), "metodo": str(e_met),
-                                    "empleado": str(st.session_state['usuario'])
-                                }
-                                enviar_google(p_caja_nuevo)
-                            
-                            # --- ESTO ES LO QUE CAMBIA: GUARDAR TODO EL HISTORIAL ---
                             st.session_state['pdf_edicion'] = {
                                 "n_orden": sel,
                                 "cliente": e_cli,
@@ -440,11 +463,12 @@ if opcion == "Ventas":
                                 "total_abonado": nuevo_abono_total,
                                 "saldo_pendiente": nuevo_saldo,
                                 "descripcion": e_desc,
-                                "historial_pagos": h_pago  # <--- Pasamos el historial acumulado
+                                "historial_pagos": h_pago
                             }
-                            
                             st.success(f"✅ Orden {sel} actualizada.")
                             st.rerun()
+                        else:
+                            st.error("❌ Ocurrió un error al actualizar.")
 
                 # --- BOTÓN DE DESCARGA (FUERA DEL FORMULARIO) ---
                 if 'pdf_edicion' in st.session_state:
